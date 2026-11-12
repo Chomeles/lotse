@@ -18,7 +18,7 @@ export function createTerminal(parent, settings, onFontSize) {
   const term = new Terminal({
     theme,
     fontFamily: '"Cascadia Mono", Consolas, monospace',
-    fontSize: settings.fontSize,
+    fontSize: settings.font_size,
     scrollback: settings.scrollback,
     cursorStyle: 'block',
     cursorBlink: true,
@@ -87,7 +87,7 @@ export function createTerminal(parent, settings, onFontSize) {
 // Übernimmt geänderte Einstellungen in alle offenen Terminals.
 export function applySettings(settings) {
   for (const { term, fit } of open) {
-    term.options.fontSize = settings.fontSize;
+    term.options.fontSize = settings.font_size;
     term.options.scrollback = settings.scrollback;
     fit.fit();
   }

@@ -23,6 +23,7 @@ ssh2-config = "0.9"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread"] }
+rand = { version = "0.10", features = ["thread_rng"] }
 
 [profile.release]
 strip = true

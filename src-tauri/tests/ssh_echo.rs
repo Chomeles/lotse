@@ -1,0 +1,98 @@
+//! Prüft den Verbindungsweg gegen einen eingebauten SSH-Server, der alles zurückschickt:
+//! Host-Schlüssel-Prüfung, Anmeldung mit Schlüssel und Passphrase, Daten durch die Shell.
+
+mod common;
+
+use std::time::Duration;
+
+use common::{new_key, start_server, temp, write_key};
+use lotse::{
+    known_hosts,
+    ssh::{self, ConnectError},
+    store::Host,
+};
+
+#[tokio::test]
+async fn verbinden_pruefen_anmelden_echo() {
+    let client_key = new_key();
+    let (port, host_key) = start_server(client_key.public_key().clone(), 0).await;
+    let shown = known_hosts::fingerprint(&host_key);
+    let known = temp("known_hosts");
+    let _ = std::fs::remove_file(&known);
+    let host = |key_path: String| Host {
+        name: "test".into(),
+        address: "127.0.0.1".into(),
+        port,
+        user: "tester".into(),
+        key_path,
+    };
+    let plain = host(write_key("id_plain", &client_key));
+    let connect = |host: Host, passphrase: Option<&'static str>, trust: Option<&str>| {
+        let (known, trust) = (known.clone(), trust.map(String::from));
+        async move { ssh::connect(&host, passphrase, trust, known).await.map(|_| ()) }
+    };
+
+    // Unbekannter Host: Fingerabdruck wird gemeldet, nichts wird gespeichert.
+    assert_eq!(
+        connect(plain.clone(), None, None).await,
+        Err(ConnectError::UnknownHost { fingerprint: shown.clone() })
+    );
+    // Ein anderer als der gezeigte Fingerabdruck schaltet nichts frei.
+    assert!(matches!(
+        connect(plain.clone(), None, Some("SHA256:falsch")).await,
+        Err(ConnectError::UnknownHost { .. })
+    ));
+    assert!(!known.exists());
+
+    // Bestätigter Fingerabdruck: Verbindung steht, Daten laufen durch die Shell und zurück.
+    let handle = ssh::connect(&plain, None, Some(shown.clone()), known.clone()).await.unwrap();
+    let (reader, writer) = ssh::open_shell(&handle, 80, 24).await.unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(ssh::pump(reader, move |data| {
+        let _ = tx.send(data.to_vec());
+    }));
+    writer.data(&b"hallo"[..]).await.unwrap();
+    let echoed = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+    assert_eq!(echoed, b"hallo");
+
+    // Der Host ist jetzt bekannt, es braucht keine Bestätigung mehr.
+    assert_eq!(connect(plain.clone(), None, None).await, Ok(()));
+
+    // Geänderter Schlüssel blockiert, auch wenn jemand dem neuen Fingerabdruck „vertraut“.
+    known_hosts::remove(&known, "127.0.0.1", port).unwrap();
+    let old = new_key().public_key().clone();
+    known_hosts::learn(&known, "127.0.0.1", port, &old).unwrap();
+    let changed = Err(ConnectError::HostChanged {
+        fingerprint: shown.clone(),
+        old: vec![known_hosts::fingerprint(&old)],
+    });
+    assert_eq!(connect(plain.clone(), None, None).await, changed);
+    assert_eq!(connect(plain.clone(), None, Some(shown.as_str())).await, changed);
+
+    // Nach dem Entfernen des Eintrags geht es wieder über die Bestätigung.
+    known_hosts::remove(&known, "127.0.0.1", port).unwrap();
+    assert_eq!(connect(plain.clone(), None, Some(shown.as_str())).await, Ok(()));
+
+    // Ein Schlüssel, den der Server nicht kennt, wird abgelehnt.
+    let stranger = host(write_key("id_fremd", &new_key()));
+    assert!(matches!(connect(stranger, None, None).await, Err(ConnectError::Other { .. })));
+
+    // Verschlüsselter Schlüssel: ohne Passphrase nachfragen, falsche melden, richtige annehmen.
+    let locked = client_key.encrypt(&mut rand::rng(), "geheim").unwrap();
+    let locked = host(write_key("id_passphrase", &locked));
+    assert_eq!(
+        connect(locked.clone(), None, None).await,
+        Err(ConnectError::NeedPassphrase { wrong: false })
+    );
+    assert_eq!(
+        connect(locked.clone(), Some("falsch"), None).await,
+        Err(ConnectError::NeedPassphrase { wrong: true })
+    );
+    assert_eq!(connect(locked, Some("geheim"), None).await, Ok(()));
+
+    // Fehlende Schlüsseldatei gibt eine lesbare Meldung statt einer Passphrase-Frage.
+    assert!(matches!(
+        connect(host(temp("gibt_es_nicht").to_string_lossy().into_owned()), None, None).await,
+        Err(ConnectError::Other { .. })
+    ));
+}
