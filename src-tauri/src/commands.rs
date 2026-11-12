@@ -39,11 +39,13 @@ pub struct App {
     dir: PathBuf,
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
+    /// Passphrasen je Schlüsseldatei, nur im Arbeitsspeicher und nur bis Lotse beendet wird.
+    passphrases: Mutex<HashMap<String, String>>,
 }
 
 impl App {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1) }
+        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), passphrases: Mutex::default() }
     }
 
     fn conn(&self, id: u32) -> Result<Arc<Conn>, String> {
@@ -74,7 +76,20 @@ pub async fn ssh_connect(
     rows: u32,
     on_data: Channel<InvokeResponseBody>,
 ) -> Result<u32, ConnectError> {
-    let handle = ssh::connect(&host, passphrase.as_deref(), trust, app.known_hosts()).await?;
+    // Ohne Eingabe die gemerkte Passphrase probieren, damit Neuverbinden und weitere Reiter nicht nachfragen.
+    let typed = passphrase.is_some();
+    let passphrase = passphrase.or_else(|| app.passphrases.lock().unwrap().get(&host.key_path).cloned());
+    let handle = match ssh::connect(&host, passphrase.as_deref(), trust, app.known_hosts()).await {
+        Ok(handle) => handle,
+        Err(ConnectError::NeedPassphrase { .. }) if !typed => {
+            app.passphrases.lock().unwrap().remove(&host.key_path);
+            return Err(ConnectError::NeedPassphrase { wrong: false });
+        }
+        Err(e) => return Err(e),
+    };
+    if let Some(passphrase) = passphrase {
+        app.passphrases.lock().unwrap().insert(host.key_path.clone(), passphrase);
+    }
     let (reader, shell) = ssh::open_shell(&handle, cols, rows)
         .await
         .map_err(|e| ConnectError::Other { message: format!("Die Shell ließ sich nicht öffnen: {e}") })?;
@@ -129,10 +144,23 @@ pub fn store_save(app: State<'_, App>, store: Store) -> Result<(), String> {
 
 /// Liefert die Hosts aus `~/.ssh/config`, die es unter den Namen in `existing` noch nicht gibt.
 #[tauri::command]
-pub fn hosts_import(existing: Vec<String>) -> Result<Vec<Host>, String> {
-    let path = std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh").join("config");
-    let file = std::fs::File::open(&path).map_err(|e| format!("{} nicht lesbar: {e}", path.display()))?;
-    hosts::import(&mut std::io::BufReader::new(file), &existing)
+pub fn hosts_import(existing: Vec<String>) -> Result<hosts::Import, String> {
+    let ssh_dir = std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh");
+    let path = ssh_dir.join("config");
+    let file = match std::fs::File::open(&path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!("Es gibt keine SSH-Config unter {}.", path.display()))
+        }
+        Err(e) => return Err(format!("{} nicht lesbar: {e}", path.display())),
+    };
+    let default_key = ["id_ed25519", "id_ecdsa", "id_rsa"]
+        .iter()
+        .map(|name| ssh_dir.join(name))
+        .find(|key| key.exists())
+        .map(|key| key.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    hosts::import(&mut std::io::BufReader::new(file), &existing, &default_key)
 }
 
 #[tauri::command]

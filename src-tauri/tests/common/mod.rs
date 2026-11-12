@@ -113,7 +113,10 @@ impl server::Handler for Echo {
     }
 
     async fn data(&mut self, channel: ChannelId, data: &[u8], session: &mut Session) -> Result<(), Self::Error> {
-        if self.shells.contains(&channel) {
+        if data == [4] {
+            // Strg+D beendet die Shell, wie `exit` auf einem echten Server.
+            session.close(channel)?;
+        } else if self.shells.contains(&channel) {
             session.data(channel, data.to_vec())?;
         }
         Ok(())

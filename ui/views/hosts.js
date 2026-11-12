@@ -28,7 +28,7 @@ export async function editHost(host, hosts, hint = '') {
     <h2>${host ? 'Host bearbeiten' : 'Neuer Host'}</h2>
     ${hint ? `<p class="warn">${esc(hint)}</p>` : ''}
     <label><span>Name</span><input name="name" required value="${esc(h.name)}" autofocus></label>
-    <label><span>Adresse</span><input name="address" required value="${esc(h.address)}" placeholder="203.0.113.7 oder server.example.org"></label>
+    <label><span>Adresse</span><input name="address" required value="${esc(h.address)}" placeholder="server.example.org, IP oder benutzer@server:port"></label>
     <label><span>Port</span><input name="port" type="number" min="1" max="65535" required value="${h.port}"></label>
     <label><span>Benutzer</span><input name="user" required value="${esc(h.user)}"></label>
     <label><span>Schlüsseldatei (privater Schlüssel)</span>
@@ -45,8 +45,20 @@ export async function editHost(host, hosts, hint = '') {
     const taken = hosts.some((other) => other !== host && other.name === name.value.trim());
     name.setCustomValidity(taken ? 'Diesen Namen gibt es schon.' : '');
   });
+  // „benutzer@server:2222“ (auch mit „ssh “ davor) in die Felder aufteilen.
+  const address = dialog.querySelector('[name=address]');
+  address.addEventListener('change', () => {
+    const m = address.value.trim().match(/^(?:ssh\s+)?(?:([^@\s]+)@)?(\[[^\]]+\]|[^:@\s]+)(?::(\d+))?$/);
+    if (!m || (!m[1] && !m[3] && !/^ssh\s/.test(address.value.trim()))) return;
+    address.value = m[2];
+    if (m[1]) dialog.querySelector('[name=user]').value = m[1];
+    if (m[3]) dialog.querySelector('[name=port]').value = m[3];
+  });
   dialog.querySelector('.browse').addEventListener('click', async () => {
-    const path = await window.__TAURI__.dialog.open({ title: 'Privaten Schlüssel wählen', multiple: false });
+    // Im Ordner .ssh anfangen, dort liegen Schlüssel fast immer.
+    const { homeDir, join } = window.__TAURI__.path;
+    const defaultPath = await homeDir().then((home) => join(home, '.ssh')).catch(() => undefined);
+    const path = await window.__TAURI__.dialog.open({ title: 'Privaten Schlüssel wählen', multiple: false, defaultPath });
     if (path) dialog.querySelector('[name=key_path]').value = path;
   });
 

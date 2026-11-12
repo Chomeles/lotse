@@ -1,26 +1,25 @@
-// Sehr leiser Tastenton, im Browser erzeugt: ein paar Millisekunden gefiltertes Rauschen.
+// Leiser Tastenton, im Browser erzeugt: ein weiches „Tock“ aus einem reinen Ton,
+// dessen Tonhöhe in wenigen Millisekunden abfällt (der Charakter einer Handy-Tastatur).
 let ctx;
-let noise;
 
 export function tick() {
-  if (!ctx) {
-    ctx = new AudioContext();
-    const length = Math.floor(ctx.sampleRate * 0.018);
-    noise = ctx.createBuffer(1, length, ctx.sampleRate);
-    const data = noise.getChannelData(0);
-    // Rauschen, das schnell ausklingt.
-    for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3;
-  }
-  const source = ctx.createBufferSource();
-  source.buffer = noise;
-  // Leicht schwankende Tonhöhe, damit es nicht wie ein Maschinengewehr klingt.
-  source.playbackRate.value = 0.85 + Math.random() * 0.3;
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.value = 2200;
-  filter.Q.value = 0.8;
+  ctx ??= new AudioContext();
+  const now = ctx.currentTime;
+  // Leicht schwankende Tonhöhe, damit schnelles Tippen nicht maschinell klingt.
+  const pitch = 0.96 + Math.random() * 0.08;
+
+  const tone = ctx.createOscillator();
+  tone.type = 'sine';
+  tone.frequency.setValueAtTime(880 * pitch, now);
+  tone.frequency.exponentialRampToValueAtTime(420 * pitch, now + 0.03);
+
+  // Sehr kurzer Anschlag, dann schnelles Ausklingen: kein Knacken, kein Nachhall.
   const gain = ctx.createGain();
-  gain.gain.value = 0.035;
-  source.connect(filter).connect(gain).connect(ctx.destination);
-  source.start();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.05, now + 0.003);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+
+  tone.connect(gain).connect(ctx.destination);
+  tone.start(now);
+  tone.stop(now + 0.06);
 }

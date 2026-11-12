@@ -54,7 +54,12 @@ pub async fn open(handle: &ssh::Handle) -> Result<SftpSession, String> {
 
 /// Listet einen Ordner, Ordner zuerst. `path = None` ist der Startordner des Benutzers.
 pub async fn list(sftp: &SftpSession, path: Option<&str>) -> Result<Listing, String> {
-    let path = sftp.canonicalize(path.unwrap_or(".")).await.map_err(refused)?;
+    // `~` meint den Startordner: SFTP beginnt dort, also reicht der Rest als relativer Pfad.
+    let path = match path {
+        None | Some("~") => ".",
+        Some(path) => path.strip_prefix("~/").unwrap_or(path),
+    };
+    let path = sftp.canonicalize(path).await.map_err(refused)?;
     let mut entries = vec![];
     for entry in sftp.read_dir(path.as_str()).await.map_err(refused)? {
         let meta = entry.metadata();

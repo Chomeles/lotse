@@ -40,16 +40,18 @@ async function edit(host, hint) {
 
 async function importHosts() {
   try {
-    const added = await api.hostsImport(store.hosts.map((h) => h.name));
+    const { hosts: added, skipped } = await api.hostsImport(store.hosts.map((h) => h.name));
     if (added.length) {
       store.hosts.push(...added);
       store.hosts.sort((a, b) => a.name.localeCompare(b.name));
       refreshHosts();
       await save();
     }
-    await alertBox('Import', added.length
+    const lines = [added.length
       ? `Importiert: ${added.map((h) => h.name).join(', ')}`
-      : 'Keine neuen Hosts in der SSH-Config gefunden.');
+      : 'Keine neuen Hosts in der SSH-Config gefunden.'];
+    if (skipped.length) lines.push(`Ausgelassen, weil sie einen Sprung-Host (ProxyJump) brauchen: ${skipped.join(', ')}`);
+    await alertBox('Import', lines.join('\n\n'));
   } catch (e) {
     await alertBox('Import fehlgeschlagen', String(e));
   }
@@ -83,7 +85,9 @@ function setStatus(tab, text, dead = false) {
 function markClosed(tab, text = 'Verbindung getrennt') {
   if (!tabs.has(tab)) return;
   tab.id = null;
+  tab.connecting = false;
   setStatus(tab, text, true);
+  tab.terminal.term.write(`\r\n\x1b[90m[${text}. Enter verbindet neu.]\x1b[0m\r\n`);
 }
 
 function closeTab(tab) {
@@ -122,8 +126,15 @@ function openTab(host) {
   const { term } = tab.terminal;
   // Eingaben nacheinander schicken: gleichzeitige Aufrufe könnten sich sonst überholen.
   term.onData((data) => {
-    if (store.settings.typing_sound) tick();
+    if (!tab.id) {
+      if (data === '\r') attach(tab);
+      return;
+    }
     tab.sending = tab.sending.then(() => tab.id && api.sshWrite(tab.id, data)).catch(() => {});
+  });
+  // Ton nur bei echten Tastendrücken, nicht bei Mausmeldungen oder eingefügtem Text.
+  term.onKey(() => {
+    if (store.settings.typing_sound) tick();
   });
   term.onResize(({ cols, rows }) => {
     if (tab.id) api.sshResize(tab.id, cols, rows).catch(() => {});
@@ -156,7 +167,7 @@ const askPassphrase = async (host, wrong) => {
     <h2>Passphrase für den Schlüssel</h2>
     <p>${esc(host.key_path)}</p>
     ${wrong ? '<p class="warn">Die Passphrase war falsch.</p>' : ''}
-    <label><span>Passphrase (wird nicht gespeichert)</span>
+    <label><span>Passphrase (bleibt nur im Arbeitsspeicher, bis du Lotse beendest)</span>
       <input name="passphrase" type="password" required autocomplete="off" autofocus></label>
     <div class="buttons">
       <button value="" formnovalidate>Abbrechen</button>
@@ -191,6 +202,8 @@ const warnChanged = async (host, error) =>
 async function attach(tab) {
   const { host } = tab;
   const { term } = tab.terminal;
+  if (tab.connecting || tab.id) return;
+  tab.connecting = true;
   let passphrase = null;
   let trust = null;
   setStatus(tab, `Verbinde mit ${host.address} …`);
@@ -202,6 +215,7 @@ async function attach(tab) {
         (bytes) => term.write(bytes),
         () => markClosed(tab),
       );
+      tab.connecting = false;
       if (!tabs.has(tab)) api.sshDisconnect(tab.id);
       setStatus(tab, `${host.user}@${host.address}`);
       term.focus();
@@ -236,6 +250,19 @@ async function connect(host) {
 // ---------- Start ----------
 
 $('host-search').addEventListener('input', refreshHosts);
+// Enter im Suchfeld verbindet mit dem ersten Treffer.
+$('host-search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('host-list').querySelector('.connect')?.click();
+});
+// Strg + Tab und Strg + Umschalt + Tab wechseln den Reiter, auch wenn das Terminal den Fokus hat.
+window.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || e.key !== 'Tab' || tabs.size < 2 || document.querySelector('dialog')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const list = [...tabs];
+  const current = list.findIndex((t) => !t.pane.hidden);
+  selectTab(list[(current + (e.shiftKey ? -1 : 1) + list.length) % list.length]);
+}, true);
 $('host-add').addEventListener('click', () => edit(null));
 $('host-import').addEventListener('click', importHosts);
 $('settings-open').addEventListener('click', async () => {

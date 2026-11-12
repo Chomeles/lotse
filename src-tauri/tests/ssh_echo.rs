@@ -96,3 +96,30 @@ async fn verbinden_pruefen_anmelden_echo() {
         Err(ConnectError::Other { .. })
     ));
 }
+
+#[tokio::test]
+async fn nicht_erreichbar_wird_verstaendlich_gemeldet() {
+    let key_path = write_key("id_weg", &new_key());
+    let message = |address: &'static str, port: u16| {
+        let host = Host { name: "x".into(), address: address.into(), port, user: "u".into(), key_path: key_path.clone() };
+        async move {
+            match ssh::connect(&host, None, None, temp("known_hosts_weg")).await {
+                Err(ConnectError::Other { message }) => message,
+                other => panic!("unerwartet: {:?}", other.map(|_| ())),
+            }
+        }
+    };
+    // Port 1 auf dem eigenen Rechner: dort lauscht nichts.
+    let refused = message("127.0.0.1", 1).await;
+    assert!(refused.contains("nimmt auf Port 1 keine Verbindung an"), "{refused}");
+    // `.invalid` ist für Namen reserviert, die es nie gibt.
+    let unknown = message("gibt-es-nicht.invalid", 22).await;
+    assert!(unknown.contains("lässt sich nicht auflösen"), "{unknown}");
+
+    // Die .pub-Datei statt des privaten Schlüssels ist ein häufiger Fehlgriff.
+    let host = Host { name: "x".into(), address: "127.0.0.1".into(), port: 1, user: "u".into(), key_path: "C:/keys/id.pub".into() };
+    let Err(ConnectError::Other { message }) = ssh::connect(&host, None, None, temp("known_hosts_weg")).await else {
+        panic!("öffentlicher Schlüssel wurde angenommen")
+    };
+    assert!(message.contains("öffentliche Schlüssel"), "{message}");
+}

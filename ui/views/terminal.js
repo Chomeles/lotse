@@ -37,10 +37,13 @@ export function createTerminal(parent, settings, onFontSize) {
     const text = term.getSelection();
     if (text) writeText(text);
   });
-  parent.querySelector('.term').addEventListener('contextmenu', async (e) => {
-    e.preventDefault();
+  const paste = async () => {
     const text = await readText().catch(() => '');
     if (text) term.paste(text);
+  };
+  parent.querySelector('.term').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    paste();
   });
 
   const closeSearch = () => {
@@ -64,6 +67,18 @@ export function createTerminal(parent, settings, onFontSize) {
     if (e.shiftKey && e.code === 'KeyF') {
       bar.hidden = false;
       input.select();
+      return false;
+    }
+    // Wie im Windows-Terminal: Strg + V fügt ein. Strg + C kopiert, wenn etwas markiert ist, sonst bricht es ab.
+    if (e.code === 'KeyV') {
+      e.preventDefault();
+      paste();
+      return false;
+    }
+    if (e.code === 'KeyC' && (e.shiftKey || term.hasSelection())) {
+      e.preventDefault();
+      writeText(term.getSelection());
+      term.clearSelection();
       return false;
     }
     const delta = { '+': 1, '=': 1, '-': -1, '0': 0 }[e.key];

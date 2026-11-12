@@ -110,13 +110,22 @@ export function createFiles(el, getId) {
       await load(path);
     },
     async upload() {
-      const local = await window.__TAURI__.dialog.open({ title: 'Datei hochladen', multiple: false });
-      if (!local) return;
-      const name = local.split(/[\\/]/).pop();
-      if (entries.some((e) => e.name === name) && !(await ask(`„${name}“ gibt es auf dem Server schon. Überschreiben?`))) return;
-      await api.sftpUpload(getId(), local, join(name), (pct) => say(`Lade hoch: ${name} – ${pct} %`));
-      await load(path);
-      return `Hochgeladen: ${name}`;
+      const locals = await window.__TAURI__.dialog.open({ title: 'Dateien hochladen', multiple: true });
+      if (!locals?.length) return;
+      let done = 0;
+      try {
+        for (const local of locals) {
+          const name = local.split(/[\\/]/).pop();
+          if (entries.some((e) => e.name === name) && !(await ask(`„${name}“ gibt es auf dem Server schon. Überschreiben?`))) continue;
+          const count = locals.length > 1 ? ` (${done + 1} von ${locals.length})` : '';
+          await api.sftpUpload(getId(), local, join(name), (pct) => say(`Lade hoch${count}: ${name} – ${pct} %`));
+          done += 1;
+        }
+      } finally {
+        // Auch nach einem Fehler zeigen, was schon angekommen ist.
+        await load(path).catch(() => {});
+      }
+      return done === 1 ? 'Eine Datei hochgeladen.' : `${done} Dateien hochgeladen.`;
     },
     async download(entry) {
       const local = await window.__TAURI__.dialog.save({ title: 'Speichern unter', defaultPath: entry.name });

@@ -81,12 +81,27 @@ pub async fn connect(
     known_hosts: PathBuf,
 ) -> Result<Handle, ConnectError> {
     // Schlüssel zuerst: ohne ihn lohnt sich die Verbindung nicht.
-    let key = match load_secret_key(&host.key_path, passphrase) {
+    let key_path = expand_home(&host.key_path);
+    if key_path.extension().is_some_and(|ext| ext == "pub") {
+        return Err(other(format!(
+            "{} ist der öffentliche Schlüssel. Wähle die gleichnamige Datei ohne „.pub“.",
+            host.key_path
+        )));
+    }
+    let key = match load_secret_key(&key_path, passphrase) {
         Ok(key) => key,
         Err(russh::keys::Error::KeyIsEncrypted) => return Err(ConnectError::NeedPassphrase { wrong: false }),
+        Err(russh::keys::Error::IO(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(other(format!("Die Schlüsseldatei {} gibt es nicht.", host.key_path)))
+        }
         Err(russh::keys::Error::IO(e)) => return Err(other(format!("Schlüsseldatei {} nicht lesbar: {e}", host.key_path))),
         Err(_) if passphrase.is_some() => return Err(ConnectError::NeedPassphrase { wrong: true }),
-        Err(e) => return Err(other(format!("Schlüsseldatei {} unbrauchbar: {e}", host.key_path))),
+        Err(e) => {
+            return Err(other(format!(
+                "{} ist kein privater Schlüssel, den Lotse lesen kann (OpenSSH, PEM oder PuTTY-ppk): {e}",
+                host.key_path
+            )))
+        }
     };
 
     let issue = Arc::new(Mutex::new(None));
@@ -106,7 +121,7 @@ pub async fn connect(
         Err(_) => return Err(other(format!("{} antwortet nicht (Zeitüberschreitung).", host.address))),
         Ok(Err(e)) => {
             let issue = issue.lock().unwrap().take();
-            return Err(issue.unwrap_or_else(|| other(format!("Verbindung zu {} fehlgeschlagen: {e}", host.address))));
+            return Err(issue.unwrap_or_else(|| unreachable_host(&e, host)));
         }
         Ok(Ok(handle)) => handle,
     };
@@ -124,6 +139,37 @@ pub async fn connect(
         )));
     }
     Ok(handle)
+}
+
+/// `~/` am Anfang meint den Benutzerordner, wie in der SSH-Config üblich.
+fn expand_home(path: &str) -> PathBuf {
+    let rest = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"));
+    match (rest, std::env::home_dir()) {
+        (Some(rest), Some(home)) => home.join(rest),
+        _ => PathBuf::from(path),
+    }
+}
+
+/// Sagt in einem Satz, warum der Server nicht erreichbar war.
+fn unreachable_host(e: &russh::Error, host: &Host) -> ConnectError {
+    use std::io::ErrorKind;
+    let (address, port) = (&host.address, host.port);
+    let message = match e {
+        russh::Error::IO(io) => match (io.kind(), io.raw_os_error()) {
+            (ErrorKind::ConnectionRefused, _) => {
+                format!("{address} nimmt auf Port {port} keine Verbindung an. Läuft dort ein SSH-Server?")
+            }
+            (ErrorKind::TimedOut, _) => format!("{address} antwortet nicht (Zeitüberschreitung)."),
+            (ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable, _) => {
+                format!("{address} ist nicht erreichbar. Besteht eine Netzwerkverbindung?")
+            }
+            // 11001/11002/11004: Windows findet den Namen nicht.
+            (_, Some(11001 | 11002 | 11004)) => format!("Der Name {address} lässt sich nicht auflösen. Tippfehler?"),
+            _ => format!("Verbindung zu {address} fehlgeschlagen: {io}"),
+        },
+        other => format!("Verbindung zu {address} fehlgeschlagen: {other}"),
+    };
+    ConnectError::Other { message }
 }
 
 /// Öffnet eine Shell mit Terminal der angegebenen Größe.
@@ -185,7 +231,15 @@ pub async fn remove_tree(handle: &Handle, path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::quote;
+    use super::{expand_home, quote};
+
+    #[test]
+    fn tilde_meint_den_benutzerordner() {
+        let home = std::env::home_dir().unwrap();
+        assert_eq!(expand_home("~/.ssh/id_ed25519"), home.join(".ssh/id_ed25519"));
+        assert_eq!(expand_home("C:/keys/web"), std::path::PathBuf::from("C:/keys/web"));
+        assert_eq!(expand_home("~fremd/key"), std::path::PathBuf::from("~fremd/key"));
+    }
 
     #[test]
     fn pfade_werden_woertlich_genommen() {
