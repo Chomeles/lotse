@@ -24,7 +24,7 @@ body {
   overflow: hidden;
 }
 
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 
 button {
   background: var(--raised);
@@ -38,7 +38,7 @@ button.primary { background: var(--green); border-color: var(--green); color: #0
 button.danger { border-color: var(--red); color: var(--red); }
 button:disabled { opacity: .5; cursor: default; }
 
-input, select {
+input, select, textarea {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -97,7 +97,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .pane[hidden] { display: none; }
 .pane-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-.pane-bar button[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
+.pane-bar button[aria-pressed="true"], .areas button[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
 .pane-bar .status { margin-left: auto; color: var(--muted); }
 .pane-bar .status.dead { color: var(--red); }
 .pane-body { flex: 1; min-height: 0; position: relative; }
@@ -158,3 +158,17 @@ input[type=checkbox] { width: auto; accent-color: var(--green); }
 dialog .row { display: flex; gap: 6px; }
 dialog .buttons { display: flex; gap: 6px; justify-content: flex-end; margin-top: 14px; }
 dialog .buttons .left { margin-right: auto; }
+
+/* Fenster „Einstellungen“ mit seinen drei Bereichen */
+dialog.wide { width: min(720px, 94vw); }
+dialog textarea { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; resize: vertical; word-break: break-all; }
+.areas { display: flex; gap: 6px; margin-bottom: 14px; }
+dialog section[hidden] { display: none; }
+.cards { list-style: none; margin: 0 0 10px; padding: 0; max-height: 50vh; overflow-y: auto; }
+.cards li { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); }
+.cards li > div:first-child { flex: 1; min-width: 0; }
+.cards small, .cards code { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.cards strong + small { display: inline; margin-left: 6px; }
+.cards .warn { color: var(--red); }
+.cards .actions { display: grid; gap: 4px; }
+.cards .none { color: var(--muted); }

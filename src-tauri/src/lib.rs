@@ -1,5 +1,6 @@
 mod commands;
 pub mod hosts;
+pub mod keys;
 pub mod known_hosts;
 pub mod sftp;
 pub mod ssh;
@@ -27,6 +28,11 @@ pub fn run() {
             commands::ssh_resize,
             commands::ssh_disconnect,
             commands::known_host_remove,
+            commands::known_hosts_list,
+            commands::keys_list,
+            commands::key_public,
+            commands::key_generate,
+            commands::key_delete,
             commands::store_load,
             commands::store_save,
             commands::hosts_import,

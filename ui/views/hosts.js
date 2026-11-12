@@ -1,3 +1,4 @@
+import { api } from '../api.js';
 import { ask, esc, openDialog } from '../dialog.js';
 
 // Zeichnet die Hostliste, gefiltert nach dem Suchtext.
@@ -32,7 +33,8 @@ export async function editHost(host, hosts, hint = '') {
     <label><span>Port</span><input name="port" type="number" min="1" max="65535" required value="${h.port}"></label>
     <label><span>Benutzer</span><input name="user" required value="${esc(h.user)}"></label>
     <label><span>Schlüsseldatei (privater Schlüssel)</span>
-      <span class="row"><input name="key_path" value="${esc(h.key_path)}" aria-describedby="key-hint"><button type="button" class="browse">Durchsuchen</button></span>
+      <span class="row"><input name="key_path" value="${esc(h.key_path)}" list="key-list" aria-describedby="key-hint"><button type="button" class="browse">Durchsuchen</button></span>
+      <datalist id="key-list"></datalist>
       <small id="key-hint">Leer lassen = Anmeldung mit Passwort.</small>
     </label>
     <div class="buttons">
@@ -55,6 +57,13 @@ export async function editHost(host, hosts, hint = '') {
     if (m[1]) dialog.querySelector('[name=user]').value = m[1];
     if (m[3]) dialog.querySelector('[name=port]').value = m[3];
   });
+  // Bekannte Schlüssel zur Auswahl anbieten. Ohne Liste bleibt das Feld ein normales Textfeld.
+  api.keysList(hosts).then((keys) => {
+    dialog.querySelector('#key-list').innerHTML = keys
+      .filter((k) => k.fingerprint)
+      .map((k) => `<option value="${esc(k.path)}">${esc(k.kind)}${k.encrypted ? ', mit Passphrase' : ''}</option>`)
+      .join('');
+  }).catch(() => {});
   dialog.querySelector('.browse').addEventListener('click', async () => {
     // Im Ordner .ssh anfangen, dort liegen Schlüssel fast immer.
     const { homeDir, join } = window.__TAURI__.path;

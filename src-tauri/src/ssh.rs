@@ -182,7 +182,7 @@ async fn login_password(
 }
 
 /// `~/` am Anfang meint den Benutzerordner, wie in der SSH-Config üblich.
-fn expand_home(path: &str) -> PathBuf {
+pub fn expand_home(path: &str) -> PathBuf {
     let rest = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"));
     match (rest, std::env::home_dir()) {
         (Some(rest), Some(home)) => home.join(rest),

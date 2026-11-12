@@ -6,6 +6,9 @@ Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
 ## 0.3.0 – 2026-11-12
 - Anmeldung mit Passwort: ein Host ohne Schlüsseldatei fragt nach dem Passwort (gemerkt nur im Arbeitsspeicher, nie gespeichert); Server, die nur Schlüssel erlauben, bekommen eine klare Meldung
+- „Einstellungen“ ist jetzt ein Fenster mit drei Bereichen: Einstellungen, Schlüssel, Bekannte Hosts
+- Schlüssel: Liste aus `~/.ssh` mit Typ, Fingerabdruck, Passphrase-Schutz und zugehörigen Hosts; öffentlichen Schlüssel anzeigen und kopieren, neuen ED25519-Schlüssel erzeugen (überschreibt nie etwas), Schlüssel löschen mit Rückfrage; das Host-Formular bietet die Schlüssel zur Auswahl an
+- Bekannte Hosts: Liste mit Adresse, Port, Schlüsseltyp und Fingerabdruck, „Entfernen“ je Eintrag
 
 ## 0.2.0 – 2026-11-12
 Alltags-Szenarien durchgespielt und nachgebessert.

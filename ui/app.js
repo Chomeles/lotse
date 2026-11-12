@@ -3,7 +3,7 @@ import { tick } from './sound.js';
 import { alertBox, esc, openDialog } from './dialog.js';
 import { createFiles } from './views/files.js';
 import { editHost, renderHosts } from './views/hosts.js';
-import { editSettings } from './views/settings.js';
+import { openSettings } from './views/settings.js';
 import { applySettings, createTerminal } from './views/terminal.js';
 
 const $ = (id) => document.getElementById(id);
@@ -283,7 +283,7 @@ window.addEventListener('keydown', (e) => {
 $('host-add').addEventListener('click', () => edit(null));
 $('host-import').addEventListener('click', importHosts);
 $('settings-open').addEventListener('click', async () => {
-  const settings = await editSettings(store.settings);
+  const settings = await openSettings(store.settings, store.hosts);
   if (settings) setSettings(settings);
 });
 

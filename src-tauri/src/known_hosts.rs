@@ -1,6 +1,7 @@
 use std::{fs, io, path::Path};
 
-use russh::keys::{known_hosts, Error, HashAlg, PublicKey};
+use russh::keys::{known_hosts, Algorithm, Error, HashAlg, PublicKey};
+use serde::Serialize;
 
 use crate::store::write_atomic;
 
@@ -14,6 +15,47 @@ pub enum HostKey {
 
 pub fn fingerprint(key: &PublicKey) -> String {
     key.fingerprint(HashAlg::Sha256).to_string()
+}
+
+/// Schlüsseltyp, wie man ihn von `ssh-keygen` kennt.
+pub fn kind(key: &PublicKey) -> String {
+    match key.algorithm() {
+        Algorithm::Ed25519 => "ED25519".into(),
+        Algorithm::Rsa { .. } => "RSA".into(),
+        Algorithm::Ecdsa { .. } => "ECDSA".into(),
+        Algorithm::Dsa => "DSA".into(),
+        other => other.as_str().to_string(),
+    }
+}
+
+/// Ein Eintrag der Known-Hosts-Datei, so wie ihn die Oberfläche zeigt.
+#[derive(Debug, PartialEq, Serialize)]
+pub struct Entry {
+    pub address: String,
+    pub port: u16,
+    pub kind: String,
+    pub fingerprint: String,
+}
+
+/// Alle Einträge der Datei. Sie wird nur von `learn` geschrieben: ein Name je Zeile, im Klartext.
+pub fn list(path: &Path) -> io::Result<Vec<Entry>> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) => return Err(e),
+    };
+    Ok(text
+        .lines()
+        .filter_map(|line| {
+            let (name, key) = line.split_once(' ')?;
+            let key = PublicKey::from_openssh(key).ok()?;
+            let (address, port) = match name.strip_prefix('[').and_then(|rest| rest.split_once("]:")) {
+                Some((address, port)) => (address, port.parse().ok()?),
+                None => (name, 22),
+            };
+            Some(Entry { address: address.to_string(), port, kind: kind(&key), fingerprint: fingerprint(&key) })
+        })
+        .collect())
 }
 
 /// Strenger als `russh::keys::check_known_hosts_path`: dort gilt ein Host als unbekannt,
@@ -73,9 +115,23 @@ mod tests {
         // Anderer Port ist ein anderer Eintrag.
         assert_eq!(check(&path, "srv", 2222, &other).unwrap(), HostKey::Known);
 
+        let entry = |port, key: &PublicKey| Entry {
+            address: "srv".into(),
+            port,
+            kind: "ED25519".into(),
+            fingerprint: fingerprint(key),
+        };
+        assert_eq!(list(&path).unwrap(), [entry(22, &a), entry(2222, &other)]);
+
         remove(&path, "srv", 22).unwrap();
+        assert_eq!(list(&path).unwrap(), [entry(2222, &other)]);
         assert_eq!(check(&path, "srv", 22, &b).unwrap(), HostKey::Unknown);
         assert_eq!(check(&path, "srv", 2222, &other).unwrap(), HostKey::Known);
+    }
+
+    #[test]
+    fn fehlende_datei_ist_eine_leere_liste() {
+        assert_eq!(list(&std::env::temp_dir().join("lotse-known-hosts-gibt-es-nicht")).unwrap(), []);
     }
 
     #[test]

@@ -17,7 +17,7 @@ use tauri::{
 use tokio::sync::OnceCell;
 
 use crate::{
-    hosts, known_hosts, sftp,
+    hosts, keys, known_hosts, sftp,
     ssh::{self, ConnectError},
     store::{self, Host, Store},
 };
@@ -65,6 +65,14 @@ impl App {
 
 fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
+}
+
+/// Der Ordner mit SSH-Config und Schlüsseln. LOTSE_SSH_DIR lenkt ihn um (für Tests, damit `~/.ssh` unberührt bleibt).
+fn ssh_dir() -> Result<PathBuf, String> {
+    match std::env::var_os("LOTSE_SSH_DIR") {
+        Some(dir) => Ok(dir.into()),
+        None => Ok(std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh")),
+    }
 }
 
 /// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt.
@@ -149,6 +157,38 @@ pub fn known_host_remove(app: State<'_, App>, address: String, port: u16) -> Res
 }
 
 #[tauri::command]
+pub fn known_hosts_list(app: State<'_, App>) -> Result<Vec<known_hosts::Entry>, String> {
+    known_hosts::list(&app.known_hosts()).map_err(|e| format!("Known-Hosts-Datei nicht lesbar: {e}"))
+}
+
+/// Schlüssel aus `~/.ssh` und die Schlüsseldateien der übergebenen Hosts.
+#[tauri::command]
+pub fn keys_list(hosts: Vec<Host>) -> Result<Vec<keys::KeyInfo>, String> {
+    let used: Vec<_> = hosts
+        .into_iter()
+        .filter(|host| !host.key_path.is_empty())
+        .map(|host| (host.name, ssh::expand_home(&host.key_path)))
+        .collect();
+    Ok(keys::list(&ssh_dir()?, &used))
+}
+
+#[tauri::command]
+pub fn key_public(path: PathBuf) -> Result<String, String> {
+    keys::public_key(&path)
+}
+
+/// Liefert den Pfad des neuen privaten Schlüssels.
+#[tauri::command]
+pub fn key_generate(name: String, passphrase: Option<String>) -> Result<PathBuf, String> {
+    keys::generate(&ssh_dir()?, name.trim(), passphrase.as_deref())
+}
+
+#[tauri::command]
+pub fn key_delete(path: PathBuf) -> Result<(), String> {
+    keys::delete(&path)
+}
+
+#[tauri::command]
 pub fn store_load(app: State<'_, App>) -> Result<Store, String> {
     store::load(&app.store())
 }
@@ -161,7 +201,7 @@ pub fn store_save(app: State<'_, App>, store: Store) -> Result<(), String> {
 /// Liefert die Hosts aus `~/.ssh/config`, die es unter den Namen in `existing` noch nicht gibt.
 #[tauri::command]
 pub fn hosts_import(existing: Vec<String>) -> Result<hosts::Import, String> {
-    let ssh_dir = std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh");
+    let ssh_dir = ssh_dir()?;
     let path = ssh_dir.join("config");
     let file = match std::fs::File::open(&path) {
         Ok(file) => file,

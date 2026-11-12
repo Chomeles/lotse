@@ -6,6 +6,15 @@ export const api = {
   storeSave: (store) => invoke('store_save', { store }),
   hostsImport: (existing) => invoke('hosts_import', { existing }),
   knownHostRemove: (address, port) => invoke('known_host_remove', { address, port }),
+  // Liefert [{ address, port, kind, fingerprint }].
+  knownHostsList: () => invoke('known_hosts_list'),
+
+  // Liefert [{ path, name, kind, fingerprint, encrypted, hosts }]. Leerer `fingerprint` = Datei fehlt oder ist nicht lesbar.
+  keysList: (hosts) => invoke('keys_list', { hosts }),
+  keyPublic: (path) => invoke('key_public', { path }),
+  // Liefert den Pfad des neuen Schlüssels in ~/.ssh.
+  keyGenerate: (name, passphrase) => invoke('key_generate', { name, passphrase }),
+  keyDelete: (path) => invoke('key_delete', { path }),
 
   // Liefert die Verbindungsnummer. `secret` ist die Passphrase des Schlüssels oder das Passwort.
   // `onData` bekommt Bytes der Shell, `onClose` meldet das Ende.
