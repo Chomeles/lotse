@@ -1,3 +1,4 @@
+import { icon } from '../icons.js';
 import { theme } from '../theme.js';
 
 const open = new Set();
@@ -60,14 +61,16 @@ function highlightIps(term) {
 // `onPasteNoText()` ein Einfügen, bei dem die Zwischenablage keinen Text enthält (dann vielleicht ein Bild).
 export function createTerminal(parent, settings, onFontSize, onPasteNoText) {
   parent.innerHTML = `
-    <div class="search" hidden>
-      <input type="search" placeholder="Suchen" aria-label="Im Terminal suchen">
-      <button type="button" data-dir="prev" aria-label="Vorheriger Treffer">↑</button>
-      <button type="button" data-dir="next" aria-label="Nächster Treffer">↓</button>
-      <button type="button" data-dir="close" aria-label="Suche schließen">×</button>
+    <div class="find" hidden>
+      <input type="text" placeholder="Suchen" aria-label="Im Terminal suchen" spellcheck="false">
+      <span class="count" role="status"></span>
+      <button type="button" class="ib" data-dir="prev" aria-label="Vorheriger Treffer" title="Vorheriger Treffer">${icon('prev')}</button>
+      <button type="button" class="ib" data-dir="next" aria-label="Nächster Treffer" title="Nächster Treffer">${icon('next')}</button>
+      <button type="button" class="ib" data-dir="close" aria-label="Suche schließen" title="Schließen">${icon('x')}</button>
     </div>
     <div class="term"></div>`;
-  const bar = parent.querySelector('.search');
+  const bar = parent.querySelector('.find');
+  const count = bar.querySelector('.count');
   const input = bar.querySelector('input');
 
   const term = new Terminal({
@@ -107,10 +110,23 @@ export function createTerminal(parent, settings, onFontSize, onPasteNoText) {
 
   const closeSearch = () => {
     bar.hidden = true;
+    term.options.theme = theme;
     search.clearDecorations();
     term.focus();
   };
-  const find = (back) => (back ? search.findPrevious(input.value) : search.findNext(input.value));
+  // Alle Treffer bekommen einen blassen, der aktuelle einen kräftigen pinken Grund. Erst damit meldet xterm die Trefferzahl.
+  const decorations = {
+    matchBackground: '#51273e',
+    activeMatchBackground: theme.magenta,
+    matchOverviewRuler: '#51273e',
+    activeMatchColorOverviewRuler: theme.magenta,
+  };
+  const find = (back, incremental = false) =>
+    search[back ? 'findPrevious' : 'findNext'](input.value, { decorations, incremental });
+  search.onDidChangeResults(({ resultIndex, resultCount }) => {
+    count.textContent = resultCount ? `${resultIndex + 1} / ${resultCount}` : input.value ? 'Kein Treffer' : '';
+  });
+  input.addEventListener('input', () => find(false, true));
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') find(e.shiftKey);
     if (e.key === 'Escape') closeSearch();
@@ -125,6 +141,8 @@ export function createTerminal(parent, settings, onFontSize, onPasteNoText) {
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
     if (e.shiftKey && e.code === 'KeyF') {
       bar.hidden = false;
+      // Der aktuelle Treffer ist für xterm eine Markierung: solange gesucht wird, ist sie pink statt grün.
+      term.options.theme = { ...theme, selectionBackground: theme.magenta, selectionForeground: theme.background };
       input.select();
       return false;
     }

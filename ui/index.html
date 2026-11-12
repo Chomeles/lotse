@@ -7,21 +7,51 @@
   <link rel="stylesheet" href="vendor/xterm/xterm.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <aside id="sidebar">
-    <h1>Lotse <small id="version"></small></h1>
-    <input id="host-search" type="search" placeholder="Hosts suchen" aria-label="Hosts suchen">
-    <ul id="host-list"></ul>
-    <div class="side-actions">
-      <button type="button" id="host-add" class="primary">Neuer Host</button>
-      <button type="button" id="host-import">Aus SSH-Config importieren</button>
-      <button type="button" id="settings-open">Einstellungen</button>
+<body class="win">
+  <aside class="side">
+    <div class="brand" data-tauri-drag-region>
+      <svg class="logo" viewBox="0 0 24 24" role="img" aria-label="Lotse"><rect x="1" y="1" width="22" height="22" rx="6" fill="#0d1117" stroke="#27303c"/><path d="M8 6v8.5a2.5 2.5 0 0 0 2.5 2.5H17" fill="none" stroke="#4ade80" stroke-width="2.4" stroke-linecap="round"/><circle cx="16.5" cy="7.5" r="2" fill="#ff5fa2"/></svg>
+      <b>Lotse</b><small id="version"></small>
+    </div>
+    <label class="search">
+      <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM10.5 10.5 14 14"/></svg>
+      <input id="host-search" type="text" placeholder="Host suchen" aria-label="Host suchen" spellcheck="false">
+    </label>
+    <div class="label">Hosts</div>
+    <div class="hosts" id="host-list"></div>
+    <div class="sidefoot">
+      <button type="button" class="navbtn" data-do="host-add"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Neuer Host</button>
+      <button type="button" class="navbtn" data-do="settings"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5h5M11 5h2.5M2.5 11h2M8.5 11h5M7.5 5a1.75 1.75 0 1 0 3.5 0 1.75 1.75 0 0 0-3.5 0zM5 11a1.75 1.75 0 1 0 3.5 0A1.75 1.75 0 0 0 5 11z"/></svg>Einstellungen</button>
     </div>
   </aside>
-  <main>
-    <nav id="tabs" aria-label="Verbindungen"></nav>
+  <main class="main empty">
+    <div class="tabs" data-tauri-drag-region>
+      <nav id="tabs" aria-label="Verbindungen"></nav>
+      <div class="grow" data-tauri-drag-region></div>
+      <div class="winctl">
+        <button type="button" data-win="minimize" aria-label="Minimieren"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8"/></svg></button>
+        <button type="button" data-win="toggleMaximize" aria-label="Maximieren"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5h7v7h-7z"/></svg></button>
+        <button type="button" data-win="close" class="close" aria-label="Schließen"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+    </div>
     <div id="panes">
-      <p id="empty">Kein Host verbunden. Wähle links einen Host oder lege einen neuen an.</p>
+      <div id="empty">
+        <div class="hero">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#10151c" stroke="#27303c" stroke-width="0.5"/><path d="M8 6v8.5a2.5 2.5 0 0 0 2.5 2.5H17" fill="none" stroke="#4ade80" stroke-width="2.4" stroke-linecap="round"/><circle cx="16.5" cy="7.5" r="2" fill="#ff5fa2"/></svg>
+          <h1>Kein Host verbunden</h1>
+          <p>Wähle links einen Host aus oder tippe seinen Namen ins Suchfeld. Enter verbindet mit dem ersten Treffer.</p>
+        </div>
+        <div class="btns">
+          <button type="button" class="btn pri" data-do="host-add"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Neuer Host</button>
+        </div>
+        <div class="keys">
+          <kbd>Strg + Umschalt + F</kbd><span>Im Terminal suchen</span>
+          <kbd>Strg + Plus / Minus</kbd><span>Schrift größer oder kleiner</span>
+          <kbd>Strg + Tab</kbd><span>Nächster Reiter</span>
+          <kbd>Markieren</kbd><span>Kopiert den Text</span>
+          <kbd>Rechtsklick</kbd><span>Fügt ein</span>
+        </div>
+      </div>
     </div>
   </main>
   <script src="vendor/xterm/xterm.js"></script>

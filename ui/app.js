@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { tick } from './sound.js';
-import { alertBox, esc, openDialog } from './dialog.js';
+import { alertBox, errorHint, esc, openDialog } from './dialog.js';
+import { icon } from './icons.js';
 import { createFiles } from './views/files.js';
 import { editHost, renderHosts } from './views/hosts.js';
 import { openSettings } from './views/settings.js';
@@ -22,17 +23,36 @@ async function save() {
   }
 }
 
+// Zustand eines Hosts über alle seine Reiter: verbunden schlägt verbindet schlägt getrennt.
+const hostState = (host) => {
+  const states = [...tabs].filter((t) => t.host === host).map((t) => t.state);
+  return ['g', 'a', 'r'].find((s) => states.includes(s)) ?? '';
+};
+
 function refreshHosts() {
-  renderHosts($('host-list'), store.hosts, $('host-search').value, { onConnect: connect, onEdit: edit });
+  renderHosts($('host-list'), store.hosts, $('host-search').value, {
+    onConnect: connect,
+    onEdit: edit,
+    state: hostState,
+    active: [...tabs].find((t) => !t.pane.hidden)?.host,
+  });
 }
 
 async function edit(host, hint) {
   const result = await editHost(host, store.hosts, hint);
   if (!result) return null;
+  if (result.import) return importHosts().then(() => null);
   const index = store.hosts.indexOf(host);
   if (result.remove) store.hosts.splice(index, 1);
-  else if (index >= 0) store.hosts[index] = result.host;
-  else store.hosts.push(result.host);
+  else if (index >= 0) {
+    store.hosts[index] = result.host;
+    // Offene Reiter gehören weiter zu diesem Host und verbinden beim nächsten Mal mit den neuen Angaben.
+    for (const t of tabs) {
+      if (t.host !== host) continue;
+      t.host = result.host;
+      t.button.querySelector('.n').textContent = result.host.name;
+    }
+  } else store.hosts.push(result.host);
   store.hosts.sort((a, b) => a.name.localeCompare(b.name));
   refreshHosts();
   await save();
@@ -69,25 +89,33 @@ async function setSettings(settings) {
 function selectTab(tab) {
   for (const t of tabs) {
     t.pane.hidden = t !== tab;
+    t.button.classList.toggle('on', t === tab);
     t.button.setAttribute('aria-current', t === tab);
   }
   $('empty').hidden = tabs.size > 0;
+  document.querySelector('.main').classList.toggle('empty', !tabs.size);
+  refreshHosts();
   tab?.terminal.term.focus();
 }
 
-function setStatus(tab, text, dead = false) {
-  const status = tab.pane.querySelector('.status');
-  status.textContent = text;
-  status.classList.toggle('dead', dead);
-  tab.button.classList.toggle('dead', dead);
+// `state`: 'a' verbindet, 'g' verbunden, 'r' getrennt.
+function setStatus(tab, text, state) {
+  const dead = state === 'r';
+  tab.state = state;
+  for (const dot of [tab.button, tab.pane].map((el) => el.querySelector('.dot'))) dot.className = `dot ${state}`;
+  const label = tab.pane.querySelector('.stat-text');
+  label.textContent = text;
+  label.classList.toggle('red', dead);
+  tab.button.classList.toggle('off', dead);
   tab.pane.querySelector('.reconnect').hidden = !dead;
+  refreshHosts();
 }
 
 function markClosed(tab, text = 'Verbindung getrennt') {
   if (!tabs.has(tab)) return;
   tab.id = null;
   tab.connecting = false;
-  setStatus(tab, text, true);
+  setStatus(tab, text, 'r');
   tab.terminal.term.write(`\r\n\x1b[90m[${text}. Enter verbindet neu.]\x1b[0m\r\n`);
 }
 
@@ -106,18 +134,20 @@ function openTab(host) {
   const button = document.createElement('div');
   button.className = 'tab';
   button.innerHTML = `
-    <button type="button" class="name">${esc(host.name)}</button>
-    <button type="button" class="close" aria-label="${esc(host.name)} schließen" title="Schließen">×</button>`;
+    <button type="button" class="tmain"><span class="dot"></span><span class="n">${esc(host.name)}</span></button>
+    <button type="button" class="ib close" aria-label="Reiter ${esc(host.name)} schließen" title="Schließen">${icon('x')}</button>`;
   const pane = document.createElement('div');
   pane.className = 'pane';
   pane.innerHTML = `
-    <div class="pane-bar">
-      <button type="button" data-view="term" aria-pressed="true">Terminal</button>
-      <button type="button" data-view="files" aria-pressed="false">Dateien</button>
-      <span class="status" role="status"></span>
-      <button type="button" class="reconnect" hidden>Neu verbinden</button>
+    <div class="head">
+      <div class="seg">
+        <button type="button" class="on" data-view="term" aria-pressed="true">Terminal</button>
+        <button type="button" data-view="files" aria-pressed="false">Dateien</button>
+      </div>
+      <div class="stat" role="status"><span class="dot"></span><span class="stat-text n"></span></div>
+      <button type="button" class="btn sm reconnect" hidden>Neu verbinden</button>
     </div>
-    <div class="pane-body"><div class="term-view"></div><div class="files-view" hidden></div></div>`;
+    <div class="pane-body"><div class="term-view"></div><div class="files" hidden></div></div>`;
   $('tabs').append(button);
   $('panes').append(pane);
 
@@ -150,18 +180,21 @@ function openTab(host) {
   });
 
   // Umschalten zwischen Terminal und Dateien. Der Dateimanager entsteht beim ersten Öffnen.
-  pane.querySelector('.pane-bar').addEventListener('click', (e) => {
+  pane.querySelector('.seg').addEventListener('click', (e) => {
     const { view } = e.target.dataset;
     if (!view) return;
-    for (const b of pane.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', b.dataset.view === view);
+    for (const b of pane.querySelectorAll('[data-view]')) {
+      b.classList.toggle('on', b.dataset.view === view);
+      b.setAttribute('aria-pressed', b.dataset.view === view);
+    }
     pane.querySelector('.term-view').hidden = view !== 'term';
-    pane.querySelector('.files-view').hidden = view !== 'files';
+    pane.querySelector('.files').hidden = view !== 'files';
     if (view === 'term') return term.focus();
-    tab.files ??= createFiles(pane.querySelector('.files-view'), () => tab.id);
+    tab.files ??= createFiles(pane.querySelector('.files'), () => tab.id);
     tab.files.show();
   });
 
-  button.querySelector('.name').addEventListener('click', () => selectTab(tab));
+  button.querySelector('.tmain').addEventListener('click', () => selectTab(tab));
   button.querySelector('.close').addEventListener('click', () => closeTab(tab));
   pane.querySelector('.reconnect').addEventListener('click', () => attach(tab));
   tabs.add(tab);
@@ -171,55 +204,63 @@ function openTab(host) {
 
 // ---------- Verbinden ----------
 
-const askPassphrase = async (host, wrong) => {
+// Fragt nach Passphrase oder Passwort. Beides bleibt nur im Arbeitsspeicher.
+const askSecret = async ({ title, intro, subject, label, wrong, ok }) => {
   const { action, data } = await openDialog(`
-    <h2>Passphrase für den Schlüssel</h2>
-    <p>${esc(host.key_path)}</p>
-    ${wrong ? '<p class="warn">Die Passphrase war falsch.</p>' : ''}
-    <label><span>Passphrase (bleibt nur im Arbeitsspeicher, bis du Lotse beendest)</span>
-      <input name="passphrase" type="password" required autocomplete="off" autofocus></label>
-    <div class="buttons">
-      <button value="" formnovalidate>Abbrechen</button>
-      <button value="ok" class="primary">Verbinden</button>
+    <h2>${icon('lock')}${title}</h2>
+    <p>${intro}</p>
+    <div class="fp">${esc(subject)}</div>
+    <label class="field"><span>${label}</span>
+      <input class="in ${wrong ? 'err' : ''}" name="secret" type="password" required autocomplete="off" autofocus>
+      ${wrong ? errorHint(wrong) : ''}
+      <span class="hint">Bleibt nur im Arbeitsspeicher, bis du Lotse beendest.</span></label>
+    <div class="acts">
+      <button value="" formnovalidate class="btn">Abbrechen</button>
+      <button value="ok" class="btn pri">${ok}</button>
     </div>`).done;
-  return action === 'ok' ? data.passphrase : null;
+  return action === 'ok' ? data.secret : null;
 };
 
-const askPassword = async (host, wrong) => {
-  const { action, data } = await openDialog(`
-    <h2>Passwort</h2>
-    <p>${esc(host.user)}@${esc(host.address)}</p>
-    ${wrong ? '<p class="warn">Das Passwort war falsch.</p>' : ''}
-    <label><span>Passwort (bleibt nur im Arbeitsspeicher, bis du Lotse beendest)</span>
-      <input name="password" type="password" required autocomplete="off" autofocus></label>
-    <div class="buttons">
-      <button value="" formnovalidate>Abbrechen</button>
-      <button value="ok" class="primary">Verbinden</button>
-    </div>`).done;
-  return action === 'ok' ? data.password : null;
-};
+const askPassphrase = (host, wrong) => askSecret({
+  title: 'Passphrase eingeben',
+  intro: 'Dieser Schlüssel ist geschützt:',
+  subject: host.key_path,
+  label: 'Passphrase',
+  wrong: wrong && 'Die Passphrase stimmt nicht. Versuch es noch einmal.',
+  ok: 'Entsperren',
+});
+
+const askPassword = (host, wrong) => askSecret({
+  title: 'Passwort eingeben',
+  intro: 'Der Server fragt nach dem Passwort für:',
+  subject: `${host.user}@${host.address}`,
+  label: 'Passwort',
+  wrong: wrong && 'Das Passwort stimmt nicht. Versuch es noch einmal.',
+  ok: 'Verbinden',
+});
 
 const confirmHost = async (host, fingerprint) =>
   (await openDialog(`
     <h2>Unbekannter Host</h2>
-    <p>${esc(host.address)}:${host.port} ist noch nicht bekannt. Fingerabdruck des Servers:</p>
-    <p><code>${esc(fingerprint)}</code></p>
-    <p>Vertraue ihm nur, wenn der Fingerabdruck zu deinem Server gehört.</p>
-    <div class="buttons">
-      <button value="" autofocus>Abbrechen</button>
-      <button value="ok" class="primary">Vertrauen und verbinden</button>
+    <p>Mit diesem Server verbindest du dich zum ersten Mal. Vergleiche den Fingerabdruck, bevor du ihm vertraust.</p>
+    <div class="field"><span>Adresse</span><div class="fp">${esc(host.address)}:${host.port}</div></div>
+    <div class="field"><span>Fingerabdruck</span><div class="fp">${esc(fingerprint)}</div></div>
+    <div class="acts">
+      <button value="" class="btn" autofocus>Abbrechen</button>
+      <button value="ok" class="btn pri">Vertrauen und verbinden</button>
     </div>`).done).action === 'ok';
 
 const warnChanged = async (host, error) =>
   (await openDialog(`
-    <h2>Der Schlüssel des Servers hat sich geändert</h2>
-    <p class="warn">Die Verbindung wurde blockiert. Entweder wurde der Server neu aufgesetzt, oder jemand gibt sich als ${esc(host.address)} aus.</p>
-    <p>Hinterlegt:\n<code>${error.old.map(esc).join('\n')}</code></p>
-    <p>Jetzt gezeigt:\n<code>${esc(error.fingerprint)}</code></p>
-    <div class="buttons">
-      <button value="remove" class="danger left">Eintrag entfernen</button>
-      <button value="" autofocus>Abbrechen</button>
-    </div>`).done).action === 'remove';
+    <h2>${icon('warn')}Warnung: Schlüssel des Servers hat sich geändert</h2>
+    <p class="lead">Der Server <span class="mono">${esc(host.address)}:${host.port}</span> zeigt einen anderen Schlüssel als beim letzten Mal. Lotse hat die Verbindung nicht aufgebaut.</p>
+    <p>Das passiert, wenn der Server neu aufgesetzt wurde. Es kann aber auch heißen, dass sich jemand zwischen dich und den Server geschaltet hat. Entferne den Eintrag nur, wenn du den Grund kennst.</p>
+    <div class="field"><span>Bekannter Fingerabdruck</span><div class="fp">${error.old.map(esc).join('\n')}</div></div>
+    <div class="field"><span class="red">Neuer Fingerabdruck</span><div class="fp new">${esc(error.fingerprint)}</div></div>
+    <div class="acts">
+      <button value="remove" class="btn danger left">Eintrag entfernen</button>
+      <button value="" class="btn" autofocus>Abbrechen</button>
+    </div>`, 'warn').done).action === 'remove';
 
 // Verbindet den Reiter mit seinem Host und führt durch Passphrase, Passwort und Host-Schlüssel-Fragen.
 async function attach(tab) {
@@ -229,7 +270,7 @@ async function attach(tab) {
   tab.connecting = true;
   let secret = null;
   let trust = null;
-  setStatus(tab, `Verbinde mit ${host.address} …`);
+  setStatus(tab, `Verbinde mit ${host.address} …`, 'a');
   for (;;) {
     try {
       tab.id = await api.sshConnect(
@@ -240,7 +281,7 @@ async function attach(tab) {
       );
       tab.connecting = false;
       if (!tabs.has(tab)) api.sshDisconnect(tab.id);
-      setStatus(tab, `${host.user}@${host.address}`);
+      setStatus(tab, `${host.user}@${host.address}`, 'g');
       term.focus();
       return;
     } catch (e) {
@@ -287,17 +328,18 @@ export function dropFiles(paths) {
 }
 
 window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
-  const pane = activeTab()?.pane;
-  const body = pane?.querySelector('.pane-body');
+  const tab = activeTab();
+  const body = tab?.pane.querySelector('.pane-body');
   if (payload.type === 'enter' || payload.type === 'over') {
-    if (body) {
-      body.dataset.drop = pane.querySelector('.term-view').hidden
-        ? 'Hier ablegen: lädt in diesen Ordner hoch'
-        : 'Hier ablegen: lädt hoch und schreibt den Pfad ins Terminal';
-    }
+    if (!body || body.querySelector('.drop') || document.querySelector('dialog')) return;
+    const where = tab.pane.querySelector('.term-view').hidden
+      ? `Die Datei landet im offenen Ordner auf ${tab.host.name}.`
+      : `Die Datei landet auf ${tab.host.name}. Danach steht ihr Pfad als Text im Terminal.`;
+    body.insertAdjacentHTML('beforeend',
+      `<div class="drop">${icon('upload')}<strong>Loslassen zum Hochladen</strong><span>${esc(where)}</span></div>`);
     return;
   }
-  delete body?.dataset.drop;
+  document.querySelector('.drop')?.remove();
   if (payload.type === 'drop') dropFiles(payload.paths);
 });
 
@@ -306,7 +348,7 @@ window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
 $('host-search').addEventListener('input', refreshHosts);
 // Enter im Suchfeld verbindet mit dem ersten Treffer.
 $('host-search').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('host-list').querySelector('.connect')?.click();
+  if (e.key === 'Enter') $('host-list').querySelector('.hmain')?.click();
 });
 // Strg + Tab und Strg + Umschalt + Tab wechseln den Reiter, auch wenn das Terminal den Fokus hat.
 window.addEventListener('keydown', (e) => {
@@ -317,14 +359,17 @@ window.addEventListener('keydown', (e) => {
   const current = list.findIndex((t) => !t.pane.hidden);
   selectTab(list[(current + (e.shiftKey ? -1 : 1) + list.length) % list.length]);
 }, true);
-$('host-add').addEventListener('click', () => edit(null));
-$('host-import').addEventListener('click', importHosts);
-$('settings-open').addEventListener('click', async () => {
-  const settings = await openSettings(store.settings, store.hosts);
-  if (settings) setSettings(settings);
-});
+const commands = {
+  'host-add': () => edit(null),
+  settings: () => openSettings(store.settings, store.hosts, setSettings),
+};
+for (const button of document.querySelectorAll('[data-do]')) button.addEventListener('click', commands[button.dataset.do]);
 
-window.__TAURI__.app.getVersion().then((v) => { $('version').textContent = `v${v}`; });
+// Eigene Fensterknöpfe, weil das Fenster keinen Rahmen von Windows hat.
+const win = window.__TAURI__.window.getCurrentWindow();
+for (const button of document.querySelectorAll('[data-win]')) button.addEventListener('click', () => win[button.dataset.win]());
+
+window.__TAURI__.app.getVersion().then((v) => { $('version').textContent = v; });
 
 try {
   store = await api.storeLoad();

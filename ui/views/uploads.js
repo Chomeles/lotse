@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { icon } from '../icons.js';
 
 // Übertragungsnummern gelten für das ganze Programm, nicht je Reiter.
 let nextTransfer = 1;
@@ -27,12 +28,21 @@ export function createUploads(parent, { getId, getDir, onPath }) {
   function start(name, send, quiet = false) {
     const transfer = nextTransfer++;
     const row = document.createElement('div');
-    row.className = 'upload';
+    row.className = 'up';
     row.hidden = quiet;
-    row.innerHTML = '<span class="name"></span><progress max="100" value="0"></progress><button type="button" title="Abbrechen">×</button>';
-    row.querySelector('.name').textContent = name;
-    const bar = row.querySelector('progress');
+    row.innerHTML = `
+      <div class="top">${icon('upload', 'ok')}<span class="n"></span><span class="mono mute pct">0 %</span>
+        <button type="button" class="ib" title="Abbrechen">${icon('x')}</button></div>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div>`;
+    row.querySelector('.n').textContent = name;
+    const bar = row.querySelector('.bar');
     const button = row.querySelector('button');
+    const show = (percent) => {
+      row.hidden = false;
+      bar.firstChild.style.width = `${percent}%`;
+      bar.setAttribute('aria-valuenow', percent);
+      row.querySelector('.pct').textContent = `${percent} %`;
+    };
     bar.setAttribute('aria-label', `Fortschritt von ${name}`);
     button.setAttribute('aria-label', `Upload von ${name} abbrechen`);
     box.append(row);
@@ -54,15 +64,11 @@ export function createUploads(parent, { getId, getDir, onPath }) {
       if (cancelled) return;
       try {
         sending = true;
-        const word = await send(transfer, (percent) => {
-          row.hidden = false;
-          bar.value = percent;
-        });
+        const word = await send(transfer, show);
         sending = false;
         if (cancelled) return;
         if (word === null) return row.remove();
-        row.hidden = false;
-        bar.value = 100;
+        show(100);
         onPath(word);
         setTimeout(() => row.remove(), 2000);
       } catch (e) {
@@ -70,9 +76,11 @@ export function createUploads(parent, { getId, getDir, onPath }) {
         if (cancelled) return;
         // Fehler bleiben stehen, bis man sie schließt.
         row.hidden = false;
-        row.classList.add('error');
+        row.classList.add('err');
+        row.querySelector('.i').outerHTML = icon('warn', 'red');
+        row.querySelector('.pct').remove();
         const message = document.createElement('span');
-        message.className = 'message';
+        message.className = 'message red';
         message.setAttribute('role', 'alert');
         message.textContent = String(e);
         bar.replaceWith(message);

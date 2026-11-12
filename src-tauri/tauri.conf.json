@@ -12,6 +12,7 @@
         "title": "Lotse",
         "width": 1100,
         "height": 700,
+        "decorations": false,
         "minWidth": 700,
         "minHeight": 400
       }
