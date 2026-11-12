@@ -144,7 +144,7 @@ pub async fn sftp_list(app: State<'_, App>, id: u32, path: Option<String>) -> Re
 fn percent(on_progress: Channel<u8>) -> impl FnMut(u64, u64) {
     let mut last = u8::MAX;
     move |done, total| {
-        let now = if total == 0 { 100 } else { (done * 100 / total) as u8 };
+        let now = done.saturating_mul(100).checked_div(total).unwrap_or(100) as u8;
         if now != last {
             last = now;
             let _ = on_progress.send(now);
@@ -186,5 +186,15 @@ pub async fn sftp_mkdir(app: State<'_, App>, id: u32, path: String) -> Result<()
 
 #[tauri::command]
 pub async fn sftp_delete(app: State<'_, App>, id: u32, path: String, is_dir: bool) -> Result<(), String> {
-    sftp::delete(app.conn(id)?.sftp().await?, &path, is_dir).await
+    // Immer der kürzeste Weg: Datei und leerer Ordner sind je eine SFTP-Anfrage (geht auf jedem Server),
+    // ein voller Ordner ist ein einziger Befehl statt einer Anfrage je Datei.
+    let conn = app.conn(id)?;
+    let sftp = conn.sftp().await?;
+    if !is_dir {
+        sftp::delete_file(sftp, &path).await
+    } else if sftp::delete_empty_dir(sftp, &path).await.is_ok() {
+        Ok(())
+    } else {
+        ssh::remove_tree(&conn.handle, &path).await
+    }
 }

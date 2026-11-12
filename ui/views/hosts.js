@@ -56,7 +56,8 @@ export async function editHost(host, hosts, hint = '') {
   return {
     host: {
       name: data.name.trim(),
-      address: data.address.trim(),
+      // Eckige Klammern um IPv6-Adressen wie in URLs erlauben: [::1] wird zu ::1.
+      address: data.address.trim().replace(/^\[(.*)\]$/, '$1'),
       port: Number(data.port),
       user: data.user.trim(),
       key_path: data.key_path.trim(),

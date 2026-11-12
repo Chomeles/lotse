@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { tick } from './sound.js';
 import { alertBox, esc, openDialog } from './dialog.js';
 import { createFiles } from './views/files.js';
 import { editHost, renderHosts } from './views/hosts.js';
@@ -7,7 +8,7 @@ import { applySettings, createTerminal } from './views/terminal.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14 } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, typing_sound: true } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -121,6 +122,7 @@ function openTab(host) {
   const { term } = tab.terminal;
   // Eingaben nacheinander schicken: gleichzeitige Aufrufe könnten sich sonst überholen.
   term.onData((data) => {
+    if (store.settings.typing_sound) tick();
     tab.sending = tab.sending.then(() => tab.id && api.sshWrite(tab.id, data)).catch(() => {});
   });
   term.onResize(({ cols, rows }) => {
@@ -240,6 +242,8 @@ $('settings-open').addEventListener('click', async () => {
   const settings = await editSettings(store.settings);
   if (settings) setSettings(settings);
 });
+
+window.__TAURI__.app.getVersion().then((v) => { $('version').textContent = `v${v}`; });
 
 try {
   store = await api.storeLoad();

@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use russh_sftp::client::SftpSession;
+use russh_sftp::{
+    client::{error::Error, SftpSession},
+    protocol::StatusCode,
+};
 use serde::Serialize;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -25,6 +28,20 @@ fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// Übersetzt die häufigen Antworten des Servers in verständliche Sätze.
+fn refused(e: Error) -> String {
+    match &e {
+        Error::Status(status) => match status.status_code {
+            StatusCode::NoSuchFile => "Die Datei oder den Ordner gibt es nicht.".into(),
+            StatusCode::PermissionDenied => "Dafür fehlt dem Benutzer die Berechtigung.".into(),
+            StatusCode::Failure => "Der Server hat den Vorgang abgelehnt.".into(),
+            _ => e.to_string(),
+        },
+        Error::Timeout => "Der Server antwortet nicht.".into(),
+        _ => e.to_string(),
+    }
+}
+
 /// Öffnet den Dateikanal auf einer bestehenden Verbindung.
 pub async fn open(handle: &ssh::Handle) -> Result<SftpSession, String> {
     let channel = handle.channel_open_session().await.map_err(text)?;
@@ -32,14 +49,14 @@ pub async fn open(handle: &ssh::Handle) -> Result<SftpSession, String> {
         .request_subsystem(true, "sftp")
         .await
         .map_err(|e| format!("Der Server bietet kein SFTP an: {e}"))?;
-    SftpSession::new(channel.into_stream()).await.map_err(text)
+    SftpSession::new(channel.into_stream()).await.map_err(refused)
 }
 
 /// Listet einen Ordner, Ordner zuerst. `path = None` ist der Startordner des Benutzers.
 pub async fn list(sftp: &SftpSession, path: Option<&str>) -> Result<Listing, String> {
-    let path = sftp.canonicalize(path.unwrap_or(".")).await.map_err(text)?;
+    let path = sftp.canonicalize(path.unwrap_or(".")).await.map_err(refused)?;
     let mut entries = vec![];
-    for entry in sftp.read_dir(path.as_str()).await.map_err(text)? {
+    for entry in sftp.read_dir(path.as_str()).await.map_err(refused)? {
         let meta = entry.metadata();
         // Bei Verknüpfungen zählt das Ziel, damit verlinkte Ordner begehbar sind.
         let is_dir = if meta.is_symlink() {
@@ -87,7 +104,7 @@ pub async fn upload(
 ) -> Result<(), String> {
     let from = tokio::fs::File::open(local).await.map_err(|e| format!("{} nicht lesbar: {e}", local.display()))?;
     let total = from.metadata().await.map_err(text)?.len();
-    let to = sftp.create(remote).await.map_err(text)?;
+    let to = sftp.create(remote).await.map_err(refused)?;
     copy(from, to, total, progress).await.map_err(text)
 }
 
@@ -97,8 +114,8 @@ pub async fn download(
     local: &Path,
     progress: impl FnMut(u64, u64),
 ) -> Result<(), String> {
-    let total = sftp.metadata(remote).await.map_err(text)?.size.unwrap_or(0);
-    let from = sftp.open(remote).await.map_err(text)?;
+    let total = sftp.metadata(remote).await.map_err(refused)?.size.unwrap_or(0);
+    let from = sftp.open(remote).await.map_err(refused)?;
     // Erst in eine Nachbardatei laden: bricht es ab, bleibt eine vorhandene Datei gleichen Namens heil.
     let mut part = local.as_os_str().to_owned();
     part.push(".part");
@@ -116,18 +133,18 @@ pub async fn download(
 }
 
 pub async fn rename(sftp: &SftpSession, from: &str, to: &str) -> Result<(), String> {
-    sftp.rename(from, to).await.map_err(text)
+    sftp.rename(from, to).await.map_err(refused)
 }
 
 pub async fn mkdir(sftp: &SftpSession, path: &str) -> Result<(), String> {
-    sftp.create_dir(path).await.map_err(text)
+    sftp.create_dir(path).await.map_err(refused)
 }
 
-pub async fn delete(sftp: &SftpSession, path: &str, is_dir: bool) -> Result<(), String> {
-    if is_dir {
-        // shortcut: nur leere Ordner, rekursives Löschen bei Bedarf ergänzen
-        sftp.remove_dir(path).await.map_err(|e| format!("Ordner nicht gelöscht (nur leere Ordner): {e}"))
-    } else {
-        sftp.remove_file(path).await.map_err(text)
-    }
+pub async fn delete_file(sftp: &SftpSession, path: &str) -> Result<(), String> {
+    sftp.remove_file(path).await.map_err(refused)
+}
+
+/// Löscht einen leeren Ordner. Volle Ordner lehnt der Server ab, die löscht `ssh::remove_tree`.
+pub async fn delete_empty_dir(sftp: &SftpSession, path: &str) -> Result<(), String> {
+    sftp.remove_dir(path).await.map_err(refused)
 }

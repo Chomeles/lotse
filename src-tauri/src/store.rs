@@ -18,11 +18,12 @@ pub struct Host {
 pub struct Settings {
     pub scrollback: u32,
     pub font_size: u32,
+    pub typing_sound: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { scrollback: 10_000, font_size: 14 }
+        Self { scrollback: 10_000, font_size: 14, typing_sound: true }
     }
 }
 

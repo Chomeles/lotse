@@ -18,6 +18,7 @@ use russh::{
 use tokio::net::TcpListener;
 
 pub const SFTP_SERVER: &str = "C:/Program Files/Git/usr/lib/ssh/sftp-server.exe";
+const BASH: &str = "C:/Program Files/Git/usr/bin/bash.exe";
 
 struct Echo {
     allowed: PublicKey,
@@ -92,6 +93,22 @@ impl server::Handler for Echo {
             }
             drop(child);
         });
+        Ok(())
+    }
+
+    async fn exec_request(&mut self, id: ChannelId, command: &[u8], session: &mut Session) -> Result<(), Self::Error> {
+        self.pending.remove(&id);
+        let command = String::from_utf8_lossy(command).into_owned();
+        let Ok(out) = tokio::process::Command::new(BASH).arg("-c").arg(command).output().await else {
+            session.channel_failure(id)?;
+            return Ok(());
+        };
+        session.channel_success(id)?;
+        session.data(id, out.stdout)?;
+        session.extended_data(id, 1, out.stderr)?;
+        session.exit_status_request(id, out.status.code().unwrap_or(1) as u32)?;
+        session.eof(id)?;
+        session.close(id)?;
         Ok(())
     }
 

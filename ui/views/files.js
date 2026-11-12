@@ -97,7 +97,15 @@ export function createFiles(el, getId) {
       await load(path);
     },
     async delete(entry) {
-      if (!(await ask(`„${entry.name}“ auf dem Server löschen? Das lässt sich nicht rückgängig machen.`))) return;
+      let what = `Datei „${entry.name}“`;
+      if (entry.is_dir) {
+        // Vorher nachsehen, damit die Rückfrage sagt, was wirklich verschwindet.
+        const inside = await api.sftpList(getId(), join(entry.name)).then((l) => l.entries.length, () => null);
+        if (inside === 0) what = `Leeren Ordner „${entry.name}“`;
+        else if (inside === null) what = `Ordner „${entry.name}“ samt Inhalt (nicht einsehbar)`;
+        else what = `Ordner „${entry.name}“ samt Inhalt (${inside} ${inside === 1 ? 'Eintrag' : 'Einträge'} auf oberster Ebene)`;
+      }
+      if (!(await ask(`${what} auf dem Server löschen? Das lässt sich nicht rückgängig machen.`))) return;
       await api.sftpDelete(getId(), join(entry.name), entry.is_dir);
       await load(path);
     },

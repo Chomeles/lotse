@@ -67,12 +67,33 @@ async fn ordner_hochladen_herunterladen_umbenennen_loeschen() {
     assert!(sftp::download(&sftp, &format!("{base}/gibt-es-nicht"), &back, |_, _| {}).await.is_err());
     assert_eq!(std::fs::read(&back).unwrap(), content);
 
-    // Umbenennen und Löschen. Ein voller Ordner lässt sich nicht löschen.
+    // Umbenennen und Datei löschen.
     sftp::rename(&sftp, &format!("{base}/a.txt"), &format!("{base}/b.txt")).await.unwrap();
     assert!(remote_dir.join("b.txt").exists() && !remote_dir.join("a.txt").exists());
-    assert!(sftp::delete(&sftp, &format!("{base}/ordner"), true).await.is_err());
-    sftp::delete(&sftp, &format!("{base}/ordner/datei.bin"), false).await.unwrap();
-    sftp::delete(&sftp, &format!("{base}/ordner"), true).await.unwrap();
-    sftp::delete(&sftp, &format!("{base}/b.txt"), false).await.unwrap();
-    assert!(sftp::list(&sftp, None).await.unwrap().entries.is_empty());
+    sftp::delete_file(&sftp, &format!("{base}/b.txt")).await.unwrap();
+
+    // Ein voller Ordner mit Unterordnern verschwindet in einem Zug, auch mit Leer- und Anführungszeichen im Namen.
+    let tricky = remote_dir.join("it's ein ordner");
+    std::fs::create_dir_all(tricky.join("tief/tiefer")).unwrap();
+    for i in 0..300 {
+        std::fs::write(tricky.join(format!("tief/datei{i}")), "x").unwrap();
+    }
+    std::fs::write(remote_dir.join("bleibt.txt"), "x").unwrap();
+    ssh::remove_tree(&handle, &format!("{base}/it's ein ordner")).await.unwrap();
+    ssh::remove_tree(&handle, &format!("{base}/ordner")).await.unwrap();
+    let rest = sftp::list(&sftp, None).await.unwrap();
+    assert_eq!(rest.entries.len(), 1);
+    assert_eq!(rest.entries[0].name, "bleibt.txt");
+
+    // Leerer Ordner geht über SFTP, ein voller wird dort abgelehnt (dann übernimmt remove_tree).
+    std::fs::create_dir_all(remote_dir.join("leer")).unwrap();
+    std::fs::create_dir_all(remote_dir.join("voll/innen")).unwrap();
+    sftp::delete_empty_dir(&sftp, &format!("{base}/leer")).await.unwrap();
+    assert!(sftp::delete_empty_dir(&sftp, &format!("{base}/voll")).await.is_err());
+    assert!(!remote_dir.join("leer").exists() && remote_dir.join("voll/innen").exists());
+
+    // Wurzel und unvollständige Pfade werden nie gelöscht.
+    assert!(ssh::remove_tree(&handle, "/").await.is_err());
+    assert!(ssh::remove_tree(&handle, "ordner").await.is_err());
+    assert!(ssh::remove_tree(&handle, "").await.is_err());
 }

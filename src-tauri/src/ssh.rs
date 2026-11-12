@@ -145,3 +145,51 @@ pub async fn pump(mut shell: ChannelReadHalf, mut out: impl FnMut(&[u8])) {
         }
     }
 }
+
+/// Führt einen Befehl auf dem Server aus. Bei Fehlercode kommt die Ausgabe des Befehls als Fehler zurück.
+pub async fn exec(handle: &Handle, command: &str) -> Result<(), String> {
+    let mut channel = handle.channel_open_session().await.map_err(|e| e.to_string())?;
+    channel.exec(true, command).await.map_err(|e| e.to_string())?;
+    let mut output = Vec::new();
+    let mut code = None;
+    while let Some(msg) = channel.wait().await {
+        match msg {
+            ChannelMsg::Data { data } => output.extend_from_slice(&data),
+            ChannelMsg::ExtendedData { data, .. } => output.extend_from_slice(&data),
+            ChannelMsg::ExitStatus { exit_status } => code = Some(exit_status),
+            ChannelMsg::Failure => return Err("Der Server führt keine Befehle aus.".into()),
+            _ => {}
+        }
+    }
+    match code {
+        Some(0) => Ok(()),
+        _ => Err(String::from_utf8_lossy(&output).trim().to_string()),
+    }
+}
+
+/// Setzt einen Pfad so in einfache Anführungszeichen, dass die Shell ihn wörtlich nimmt.
+fn quote(path: &str) -> String {
+    format!("'{}'", path.replace('\'', "'\\''"))
+}
+
+/// Löscht einen Ordner samt Inhalt mit einem einzigen Befehl. Über SFTP wäre das eine Anfrage je Datei.
+// shortcut: braucht `rm` auf dem Server (Linux, BSD, macOS); für Windows-Server SFTP-Rekursion ergänzen
+pub async fn remove_tree(handle: &Handle, path: &str) -> Result<(), String> {
+    if !path.starts_with('/') || path.trim_end_matches('/').is_empty() {
+        return Err(format!("{path} wird nicht gelöscht: nur vollständige Pfade, nie das Wurzelverzeichnis."));
+    }
+    exec(handle, &format!("rm -rf -- {}", quote(path)))
+        .await
+        .map_err(|e| format!("Ordner nicht gelöscht: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::quote;
+
+    #[test]
+    fn pfade_werden_woertlich_genommen() {
+        assert_eq!(quote("/srv/mein ordner"), "'/srv/mein ordner'");
+        assert_eq!(quote("/srv/it's; rm -rf $HOME"), r"'/srv/it'\''s; rm -rf $HOME'");
+    }
+}
