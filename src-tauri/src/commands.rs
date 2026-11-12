@@ -41,7 +41,7 @@ pub struct App {
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
     /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
-    /// nur im Arbeitsspeicher und nur bis Lotse beendet wird.
+    /// im Arbeitsspeicher, bis Lotse beendet wird. Dauerhaft gespeicherte liegen in `saved`.
     secrets: Mutex<HashMap<String, String>>,
     /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
     transfers: Mutex<HashMap<u32, Arc<AtomicBool>>>,
@@ -92,34 +92,56 @@ fn secret_slot(host: &Host) -> String {
     }
 }
 
+/// Dauerhaft gespeichertes Geheimnis: ein Eintrag „Lotse“ in der Windows-Anmeldeinformationsverwaltung,
+/// verschlüsselt mit dem Windows-Konto. In `store.json` steht nie ein Geheimnis.
+fn saved(slot: &str) -> Option<keyring::Entry> {
+    keyring::Entry::new("Lotse", slot).ok()
+}
+
 #[tauri::command]
 pub async fn ssh_connect(
     app: State<'_, App>,
     host: Host,
     secret: Option<String>,
+    remember: bool,
     trust: Option<String>,
     cols: u32,
     rows: u32,
     on_data: Channel<InvokeResponseBody>,
 ) -> Result<u32, ConnectError> {
-    // Ohne Eingabe das gemerkte Geheimnis probieren, damit Neuverbinden und weitere Reiter nicht nachfragen.
+    // Ohne Eingabe das gemerkte oder gespeicherte Geheimnis probieren, damit Lotse nicht unnötig nachfragt.
     let typed = secret.is_some();
     let slot = secret_slot(&host);
-    let secret = secret.or_else(|| app.secrets.lock().unwrap().get(&slot).cloned());
+    let secret = secret
+        .or_else(|| app.secrets.lock().unwrap().get(&slot).cloned())
+        .or_else(|| saved(&slot)?.get_password().ok());
+    // Stimmt das gemerkte Geheimnis nicht mehr, wird es überall verworfen.
+    let forget = || {
+        app.secrets.lock().unwrap().remove(&slot);
+        if let Some(entry) = saved(&slot) {
+            let _ = entry.delete_credential();
+        }
+    };
     let handle = match ssh::connect(&host, secret.as_deref(), trust, app.known_hosts()).await {
         Ok(handle) => handle,
         // Das gemerkte Geheimnis stimmt nicht mehr: verwerfen und neu fragen, ohne „war falsch“.
         Err(ConnectError::NeedPassphrase { .. }) if !typed => {
-            app.secrets.lock().unwrap().remove(&slot);
+            forget();
             return Err(ConnectError::NeedPassphrase { wrong: false });
         }
         Err(ConnectError::NeedPassword { .. }) if !typed => {
-            app.secrets.lock().unwrap().remove(&slot);
+            forget();
             return Err(ConnectError::NeedPassword { wrong: false });
         }
         Err(e) => return Err(e),
     };
     if let Some(secret) = secret {
+        if remember {
+            // Klappt das Speichern nicht, läuft die Verbindung trotzdem; Lotse fragt dann beim nächsten Start wieder.
+            if let Some(entry) = saved(&slot) {
+                let _ = entry.set_password(&secret);
+            }
+        }
         app.secrets.lock().unwrap().insert(slot, secret);
     }
     let (reader, shell) = ssh::open_shell(&handle, cols, rows)

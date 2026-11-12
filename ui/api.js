@@ -16,16 +16,17 @@ export const api = {
   keyGenerate: (name, passphrase) => invoke('key_generate', { name, passphrase }),
   keyDelete: (path) => invoke('key_delete', { path }),
 
-  // Liefert die Verbindungsnummer. `secret` ist die Passphrase des Schlüssels oder das Passwort.
+  // Liefert die Verbindungsnummer. `secret` ist die Passphrase des Schlüssels oder das Passwort;
+  // `remember` speichert es nach geglückter Anmeldung dauerhaft.
   // `onData` bekommt Bytes der Shell, `onClose` meldet das Ende.
-  sshConnect(host, { secret, trust, cols, rows }, onData, onClose) {
+  sshConnect(host, { secret, remember, trust, cols, rows }, onData, onClose) {
     const channel = new Channel();
     channel.onmessage = (msg) => {
       if (msg instanceof ArrayBuffer) onData(new Uint8Array(msg));
       else if (Array.isArray(msg)) onData(Uint8Array.from(msg));
       else if (msg?.closed) onClose();
     };
-    return invoke('ssh_connect', { host, secret, trust, cols, rows, onData: channel });
+    return invoke('ssh_connect', { host, secret, remember, trust, cols, rows, onData: channel });
   },
   sshWrite: (id, data) => invoke('ssh_write', { id, data }),
   sshResize: (id, cols, rows) => invoke('ssh_resize', { id, cols, rows }),

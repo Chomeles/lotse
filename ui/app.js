@@ -1,5 +1,4 @@
 import { api } from './api.js';
-import { tick } from './sound.js';
 import { alertBox, errorHint, esc, openDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { createFiles } from './views/files.js';
@@ -10,7 +9,7 @@ import { createUploads } from './views/uploads.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, typing_sound: true, paste_dir: '~/lotse-paste' } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/lotse-paste' } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -171,10 +170,6 @@ function openTab(host) {
     }
     tab.sending = tab.sending.then(() => tab.id && api.sshWrite(tab.id, data)).catch(() => {});
   });
-  // Ton nur bei echten Tastendrücken, nicht bei Mausmeldungen oder eingefügtem Text.
-  term.onKey(() => {
-    if (store.settings.typing_sound) tick();
-  });
   term.onResize(({ cols, rows }) => {
     if (tab.id) api.sshResize(tab.id, cols, rows).catch(() => {});
   });
@@ -204,7 +199,8 @@ function openTab(host) {
 
 // ---------- Verbinden ----------
 
-// Fragt nach Passphrase oder Passwort. Beides bleibt nur im Arbeitsspeicher.
+// Fragt nach Passphrase oder Passwort. Liefert { secret, remember } oder null. Ohne Haken bleibt das Geheimnis
+// nur im Arbeitsspeicher, mit Haken legt Rust es in die Windows-Anmeldeinformationsverwaltung.
 const askSecret = async ({ title, intro, subject, label, wrong, ok }) => {
   const { action, data } = await openDialog(`
     <h2>${icon('lock')}${title}</h2>
@@ -213,12 +209,14 @@ const askSecret = async ({ title, intro, subject, label, wrong, ok }) => {
     <label class="field"><span>${label}</span>
       <input class="in ${wrong ? 'err' : ''}" name="secret" type="password" required autocomplete="off" autofocus>
       ${wrong ? errorHint(wrong) : ''}
-      <span class="hint">Bleibt nur im Arbeitsspeicher, bis du Lotse beendest.</span></label>
+</label>
+    <label class="check"><input type="checkbox" name="remember"><span>${label} speichern</span></label>
+    <span class="hint">Ohne Haken nur im Arbeitsspeicher, bis du Lotse beendest. Mit Haken verschlüsselt in der Windows-Anmeldeinformationsverwaltung, Lotse fragt dann nicht mehr.</span>
     <div class="acts">
       <button value="" formnovalidate class="btn">Abbrechen</button>
       <button value="ok" class="btn pri">${ok}</button>
     </div>`).done;
-  return action === 'ok' ? data.secret : null;
+  return action === 'ok' ? { secret: data.secret, remember: data.remember === 'on' } : null;
 };
 
 const askPassphrase = (host, wrong) => askSecret({
@@ -269,13 +267,14 @@ async function attach(tab) {
   if (tab.connecting || tab.id) return;
   tab.connecting = true;
   let secret = null;
+  let remember = false;
   let trust = null;
   setStatus(tab, `Verbinde mit ${host.address} …`, 'a');
   for (;;) {
     try {
       tab.id = await api.sshConnect(
         host,
-        { secret, trust, cols: term.cols, rows: term.rows },
+        { secret, remember, trust, cols: term.cols, rows: term.rows },
         (bytes) => term.write(bytes),
         () => markClosed(tab),
       );
@@ -286,11 +285,13 @@ async function attach(tab) {
       return;
     } catch (e) {
       if (e.kind === 'need_passphrase') {
-        secret = await askPassphrase(host, e.wrong);
-        if (secret === null) break;
+        const answer = await askPassphrase(host, e.wrong);
+        if (!answer) break;
+        ({ secret, remember } = answer);
       } else if (e.kind === 'need_password') {
-        secret = await askPassword(host, e.wrong);
-        if (secret === null) break;
+        const answer = await askPassword(host, e.wrong);
+        if (!answer) break;
+        ({ secret, remember } = answer);
       } else if (e.kind === 'unknown_host') {
         if (!(await confirmHost(host, e.fingerprint))) break;
         trust = e.fingerprint;

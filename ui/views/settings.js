@@ -24,8 +24,6 @@ export async function openSettings(settings, hosts, onChange) {
               <input class="in mono" name="font_size" type="number" min="8" max="40" required value="${settings.font_size}"></label>
             <label class="set"><span><span>Ordner für Uploads ins Terminal</span><span class="hint">Auf dem Server, für hereingezogene oder eingefügte Dateien und Bilder. ~/ ist der Startordner, der Ordner wird bei Bedarf angelegt</span></span>
               <input class="in mono" name="paste_dir" required value="${esc(settings.paste_dir)}" spellcheck="false" style="width: 200px; text-align: left"></label>
-            <div class="set"><span><span id="sound-label">Leiser Tastenton</span><span class="hint">Weiches Tock bei jedem Tastendruck im Terminal</span></span>
-              <button type="button" class="sw ${settings.typing_sound ? 'on' : ''}" role="switch" aria-checked="${settings.typing_sound}" aria-labelledby="sound-label"><span></span></button></div>
           </div>
         </section>
         <section data-area="keys" hidden>
@@ -46,7 +44,6 @@ export async function openSettings(settings, hosts, onChange) {
   const section = (area) => dialog.querySelector(`section[data-area=${area}]`);
   const keyList = section('keys').querySelector('.cards');
   const knownList = section('known').querySelector('.known');
-  const sound = dialog.querySelector('.sw');
   let keys = [];
   let known = [];
 
@@ -59,17 +56,12 @@ export async function openSettings(settings, hosts, onChange) {
       scrollback: Number(scrollback.value),
       font_size: Number(font_size.value),
       paste_dir: paste_dir.value.trim(),
-      typing_sound: sound.classList.contains('on'),
     };
     if (JSON.stringify(next) === JSON.stringify(settings)) return;
     settings = next;
     onChange(next);
   };
   section('settings').addEventListener('change', apply);
-  sound.addEventListener('click', () => {
-    sound.setAttribute('aria-checked', sound.classList.toggle('on'));
-    apply();
-  });
 
   const failed = (e) => `<div class="none red">${esc(e)}</div>`;
 

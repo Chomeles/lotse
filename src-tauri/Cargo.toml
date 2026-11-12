@@ -20,6 +20,8 @@ tokio = { version = "1", features = ["fs", "io-util", "sync", "time"] }
 russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
 russh-sftp = "3"
 ssh2-config = "0.9"
+# Gespeicherte Passphrasen und Passwörter: Windows-Anmeldeinformationsverwaltung.
+keyring = { version = "3", features = ["windows-native"] }
 # Schon im Baum (über tauri): kodiert das Bild aus der Zwischenablage.
 png = "0.18"
 

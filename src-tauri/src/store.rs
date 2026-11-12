@@ -18,14 +18,13 @@ pub struct Host {
 pub struct Settings {
     pub scrollback: u32,
     pub font_size: u32,
-    pub typing_sound: bool,
     /// Ordner auf dem Server für ins Terminal gezogene oder eingefügte Dateien. `~/` meint den Startordner.
     pub paste_dir: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { scrollback: 10_000, font_size: 14, typing_sound: true, paste_dir: "~/lotse-paste".into() }
+        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/lotse-paste".into() }
     }
 }
 
