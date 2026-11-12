@@ -1,0 +1,2 @@
+xterm.js 6.0.0, addon-fit 0.11.0, addon-search 0.16.0 (MIT), von registry.npmjs.org.
+Einzige Aenderung: Zeile mit dem Source-Map-Verweis entfernt.

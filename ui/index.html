@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lotse</title>
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <h1>Lotse</h1>
+    <input id="host-search" type="search" placeholder="Hosts suchen" aria-label="Hosts suchen">
+    <ul id="host-list"></ul>
+    <div class="side-actions">
+      <button type="button" id="host-add" class="primary">Neuer Host</button>
+      <button type="button" id="host-import">Aus SSH-Config importieren</button>
+      <button type="button" id="settings-open">Einstellungen</button>
+    </div>
+  </aside>
+  <main>
+    <nav id="tabs" aria-label="Verbindungen"></nav>
+    <div id="panes">
+      <p id="empty">Kein Host verbunden. Wähle links einen Host oder lege einen neuen an.</p>
+    </div>
+  </main>
+  <script src="vendor/xterm/xterm.js"></script>
+  <script src="vendor/xterm/addon-fit.js"></script>
+  <script src="vendor/xterm/addon-search.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

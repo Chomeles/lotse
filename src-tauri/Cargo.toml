@@ -1,0 +1,30 @@
+[package]
+name = "lotse"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "lotse"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["fs", "io-util", "sync", "net", "time", "rt", "macros"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "3"
+ssh2-config = "0.9"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "s"

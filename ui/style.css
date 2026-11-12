@@ -1,0 +1,156 @@
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --raised: #21262d;
+  --line: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --green: #4ade80;
+  --pink: #ff5fa2;
+  --red: #f87171;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+button, input, select { font: inherit; color: inherit; }
+
+button {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--green); border-color: var(--green); color: #05230f; font-weight: 600; }
+button.danger { border-color: var(--red); color: var(--red); }
+button:disabled { opacity: .5; cursor: default; }
+
+input, select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+/* Seitenleiste */
+#sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+#sidebar h1 { margin: 0 2px; font-size: 18px; letter-spacing: .5px; color: var(--green); }
+#host-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; }
+#host-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+}
+#host-list li:hover, #host-list li:focus-within { background: var(--raised); }
+#host-list .connect {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 7px 8px;
+}
+#host-list .connect strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#host-list .connect small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#host-list .edit { background: none; border: 0; color: var(--muted); padding: 4px 8px; }
+#host-list .none { color: var(--muted); padding: 8px; }
+.side-actions { display: grid; gap: 6px; }
+
+/* Hauptbereich */
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#tabs { display: flex; gap: 2px; padding: 6px 6px 0; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+#tabs:empty { display: none; }
+#tabs .tab { display: flex; align-items: center; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; }
+#tabs .tab[aria-current="true"] { background: var(--bg); border-color: var(--line); }
+#tabs .tab button { background: none; border: 0; padding: 6px 8px; white-space: nowrap; }
+#tabs .tab .close { color: var(--muted); padding: 6px; }
+#tabs .tab.dead .name { color: var(--red); }
+
+#panes { flex: 1; min-height: 0; position: relative; }
+#empty { color: var(--muted); text-align: center; margin-top: 20vh; }
+.pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pane[hidden] { display: none; }
+.pane-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.pane-bar button[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
+.pane-bar .status { margin-left: auto; color: var(--muted); }
+.pane-bar .status.dead { color: var(--red); }
+.pane-body { flex: 1; min-height: 0; position: relative; }
+.pane-body > [hidden] { display: none; }
+
+/* Terminal */
+.term-view { position: absolute; inset: 0; padding: 6px 0 0 8px; }
+.term { height: 100%; }
+.search {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.search[hidden] { display: none; }
+.search input { width: 200px; }
+
+/* Dateimanager */
+.files-view { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.files-bar { display: flex; gap: 6px; padding: 8px; align-items: center; }
+.files-bar .path { flex: 1; }
+.files-list { flex: 1; overflow: auto; margin: 0; }
+.files-list table { width: 100%; border-collapse: collapse; }
+.files-list th { text-align: left; color: var(--muted); font-weight: 400; position: sticky; top: 0; background: var(--bg); }
+.files-list th, .files-list td { padding: 5px 10px; white-space: nowrap; }
+.files-list tbody tr:hover, .files-list tbody tr:focus-within { background: var(--panel); }
+.files-list td.name { width: 100%; }
+.files-list td.name button { background: none; border: 0; padding: 0; text-align: left; }
+.files-list td.actions button { padding: 2px 8px; }
+.files-list .size, .files-list .date { color: var(--muted); text-align: right; }
+.files-msg { padding: 6px 10px; color: var(--muted); min-height: 30px; border-top: 1px solid var(--line); }
+.files-msg.error { color: var(--red); }
+
+/* Dialoge */
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  width: min(440px, 90vw);
+}
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+dialog h2 { margin: 0 0 10px; font-size: 16px; }
+dialog p { margin: 0 0 10px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+dialog p.warn { color: var(--red); }
+dialog label { display: block; margin-bottom: 10px; }
+dialog label span { display: block; margin-bottom: 3px; color: var(--muted); }
+dialog .row { display: flex; gap: 6px; }
+dialog .buttons { display: flex; gap: 6px; justify-content: flex-end; margin-top: 14px; }
+dialog .buttons .left { margin-right: auto; }
