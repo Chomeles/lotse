@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lotse – SSH-Client für Windows</title>
+  <meta name="description" content="Lotse ist ein kleiner, schneller SSH-Client für Windows: Terminal, Dateimanager und Schlüsselverwaltung in einem Fenster.">
+  <link rel="icon" href="img/logo.svg">
+  <style>
+    :root { --term: #0d1117; --bg: #0a0d12; --side: #10151c; --surf: #171d26; --raise: #1f2733; --line: #27303c; --text: #e6edf3; --mute: #9aa4b2; --green: #4ade80; --pink: #ff5fa2; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 "Segoe UI", Inter, system-ui, sans-serif; }
+    a { color: var(--green); }
+    :focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    header { display: flex; align-items: center; gap: 10px; height: 64px; }
+    header img { width: 28px; height: 28px; }
+    header b { font-size: 18px; letter-spacing: .02em; }
+    header a { margin-left: auto; color: var(--mute); text-decoration: none; }
+    header a:hover { color: var(--text); }
+    .hero { padding: 56px 0 40px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; }
+    h1 { margin: 0; font-size: clamp(34px, 6vw, 54px); line-height: 1.1; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+    h1 span { color: var(--green); }
+    .lead { margin: 0; max-width: 620px; color: var(--mute); font-size: 18px; text-wrap: pretty; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .btn { display: inline-flex; align-items: center; height: 44px; padding: 0 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); color: var(--text); text-decoration: none; font-weight: 600; }
+    .btn:hover { background: #27313f; }
+    .btn.pri { background: var(--green); border-color: var(--green); color: #052e16; }
+    .btn.pri:hover { background: #6ee7a0; }
+    .note { margin: 0; color: var(--mute); font-size: 13px; }
+    .shot { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+    section { padding: 48px 0; }
+    h2 { margin: 0 0 24px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .card { padding: 20px; background: var(--side); border: 1px solid var(--line); border-radius: 12px; }
+    .card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+    .card p { margin: 0; color: var(--mute); font-size: 15px; }
+    .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    figure { margin: 0; }
+    figcaption { margin-top: 10px; color: var(--mute); font-size: 14px; }
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+    .facts li { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; font: 13px "Cascadia Mono", Consolas, monospace; color: var(--mute); }
+    footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--mute); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="img/logo.svg" alt="">
+      <b>Lotse</b>
+      <a href="https://github.com/Chomeles/lotse">GitHub</a>
+    </header>
+
+    <main>
+      <div class="hero">
+        <h1>SSH für Windows, <span>ohne Umwege</span></h1>
+        <p class="lead">Lotse bringt Terminal, Dateimanager und Schlüsselverwaltung in ein Fenster. Klein, schnell, ohne Konto und ohne Cloud.</p>
+        <div class="btns">
+          <a class="btn pri" href="https://github.com/Chomeles/lotse/releases/latest">Installer herunterladen</a>
+          <a class="btn" href="https://github.com/Chomeles/lotse">Quelltext ansehen</a>
+        </div>
+        <p class="note">Version 0.4.0 · Windows 11 · Installer 2,9 MB, nicht signiert (Windows fragt beim ersten Start nach)</p>
+      </div>
+      <img class="shot" src="img/terminal.png" width="1100" height="700" alt="Lotse mit Hostliste links und einem verbundenen Terminal, eine IP-Adresse ist pink hervorgehoben">
+
+      <section>
+        <h2>Was Lotse kann</h2>
+        <div class="grid">
+          <div class="card"><h3>Terminal mit Reitern</h3><p>Mehrere Verbindungen nebeneinander, Suche mit Trefferzahl, IP-Adressen in Pink, Schriftgröße mit Strg + Plus und Minus.</p></div>
+          <div class="card"><h3>Dateimanager</h3><p>Ordner auf dem Server durchsehen, hoch- und herunterladen mit Fortschritt, umbenennen, löschen, neue Ordner anlegen.</p></div>
+          <div class="card"><h3>Datei ins Terminal ziehen</h3><p>Ein Bild oder eine Datei aufs Terminal ziehen oder einfügen: Lotse lädt hoch und schreibt den Pfad an die Schreibmarke.</p></div>
+          <div class="card"><h3>Schlüssel im Blick</h3><p>Schlüssel aus dem Ordner .ssh mit Typ und Fingerabdruck, neue ED25519-Schlüssel erzeugen, öffentlichen Schlüssel kopieren.</p></div>
+          <div class="card"><h3>Passphrase nur einmal</h3><p>Auf Wunsch merkt sich Lotse Passphrase oder Passwort in der Windows-Anmeldeinformationsverwaltung, nie in einer eigenen Datei.</p></div>
+          <div class="card"><h3>Sofort startklar</h3><p>Hosts aus der vorhandenen SSH-Config übernehmen. Unbekannte und geänderte Server-Schlüssel werden klar gemeldet.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Einblicke</h2>
+        <div class="pair">
+          <figure><img class="shot" src="img/dateien.png" width="1100" height="700" alt="Dateimanager mit Ordnern und Dateien auf dem Server" loading="lazy"><figcaption>Dateimanager: gleiche Verbindung, ein Klick neben dem Terminal.</figcaption></figure>
+          <figure><img class="shot" src="img/schluessel.png" width="1100" height="700" alt="Verwaltung mit der Liste der SSH-Schlüssel" loading="lazy"><figcaption>Verwaltung: Einstellungen, Schlüssel und bekannte Hosts.</figcaption></figure>
+        </div>
+      </section>
+
+      <section>
+        <h2>Unter der Haube</h2>
+        <ul class="facts">
+          <li>Tauri 2</li><li>Rust</li><li>russh</li><li>xterm.js</li><li>kein Node, kein Bundler</li><li>Daten bleiben auf dem Rechner</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>Lotse ist ein privates Projekt. Änderungen je Version stehen im <a href="https://github.com/Chomeles/lotse/blob/main/CHANGELOG.md">Changelog</a>.</footer>
+  </div>
+</body>
+</html>

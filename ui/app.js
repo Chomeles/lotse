@@ -346,6 +346,12 @@ window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
 
 // ---------- Start ----------
 
+// Das Rechtsklick-Menü des Browsers (Zurück, Drucken, Untersuchen) hat in Lotse nichts verloren.
+// In Textfeldern bleibt es, dort bietet es Kopieren und Einfügen.
+window.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest('input, textarea')) e.preventDefault();
+});
+
 $('host-search').addEventListener('input', refreshHosts);
 // Enter im Suchfeld verbindet mit dem ersten Treffer.
 $('host-search').addEventListener('keydown', (e) => {

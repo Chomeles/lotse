@@ -31,6 +31,44 @@ const askName = async (title, value = '', ok = 'OK') => {
   return action === 'ok' ? data.name.trim() : null;
 };
 
+// Kleines Menü an der Mausposition. `items` sind [Text, Symbol, Aktion, Klasse]. Es schließt bei Auswahl,
+// Klick daneben, Esc, Scrollen oder wenn das Fenster den Fokus verliert.
+function showMenu(x, y, items) {
+  document.querySelector('.menu')?.remove();
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'menu');
+  const off = new AbortController();
+  // Erst die Lauscher lösen: das Entfernen nimmt dem Knopf den Fokus und würde `close` sonst erneut auslösen.
+  const close = () => {
+    off.abort();
+    menu.remove();
+  };
+  for (const [label, symbol, run, cls = ''] of items) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = cls;
+    button.setAttribute('role', 'menuitem');
+    button.innerHTML = icon(symbol) + esc(label);
+    button.addEventListener('click', () => {
+      close();
+      run();
+    });
+    menu.append(button);
+  }
+  document.body.append(menu);
+  // Am Fensterrand nach innen rücken, damit nichts abgeschnitten wird.
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))}px`;
+  menu.querySelector('button').focus();
+  const opts = { signal: off.signal, capture: true };
+  window.addEventListener('pointerdown', (e) => menu.contains(e.target) || close(), opts);
+  window.addEventListener('keydown', (e) => e.key === 'Escape' && close(), opts);
+  window.addEventListener('wheel', close, opts);
+  window.addEventListener('blur', (e) => e.target === window && close(), opts);
+  window.addEventListener('resize', close, opts);
+}
+
 // Dateimanager einer Verbindung. `getId()` liefert die Verbindungsnummer oder null, wenn getrennt.
 export function createFiles(el, getId) {
   el.innerHTML = `
@@ -97,6 +135,15 @@ export function createFiles(el, getId) {
           <button type="button" class="ib del" data-act="delete" aria-label="${name} löschen" title="Löschen">${icon('trash')}</button>
         </span>`;
       row.addEventListener('click', (e) => run(e.target.dataset.act, entry));
+      // Rechtsklick: dieselben Aktionen wie die Symbole rechts, als Menü.
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showMenu(e.clientX, e.clientY, [
+          entry.is_dir ? ['Öffnen', 'folder', () => run('open', entry)] : ['Herunterladen', 'download', () => run('download', entry)],
+          ['Umbenennen', 'edit', () => run('rename', entry)],
+          ['Löschen', 'trash', () => run('delete', entry), 'del'],
+        ]);
+      });
       return row;
     }));
   }
@@ -134,7 +181,14 @@ export function createFiles(el, getId) {
         else if (inside === null) what = `Ordner „${entry.name}“ samt Inhalt (nicht einsehbar)`;
         else what = `Ordner „${entry.name}“ samt Inhalt (${count(inside, 'Eintrag', 'Einträge')} auf oberster Ebene)`;
       }
-      if (!(await ask(`${what} löschen?`, 'Das passiert auf dem Server und lässt sich nicht rückgängig machen.', 'Löschen', true))) return;
+      // Der volle Pfad steht dabei, weil gleiche Namen in verschiedenen Ordnern vorkommen. Ordner direkt unter /
+      // sind fast immer Systemordner und bekommen eine eigene Warnung.
+      const warning = [
+        join(entry.name),
+        'Das passiert auf dem Server und lässt sich nicht rückgängig machen. Einen Papierkorb gibt es dort nicht.',
+        entry.is_dir && path === '/' ? 'Achtung: Dieser Ordner liegt direkt unter /. Das ist vermutlich ein Systemordner.' : '',
+      ].filter(Boolean).join('\n\n');
+      if (!(await ask(`${what} löschen?`, warning, 'Löschen', true))) return;
       await api.sftpDelete(getId(), join(entry.name), entry.is_dir);
       await load(path);
     },

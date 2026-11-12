@@ -4,14 +4,17 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
-## 0.3.0 – 2026-11-12
+## 0.4.0 – 2026-11-12
 - Neues Aussehen nach dem Design-Entwurf: eigene Titelleiste mit Reitern und Fensterknöpfen, Statuspunkte (verbunden, verbindet, getrennt) in Hostliste, Reiter und Kopfzeile, Leerzustand mit Tastenkürzeln, Dateimanager mit Symbolknöpfen und Fortschrittsbalken, Suche mit Trefferzahl, neues Logo und App-Icon
 - „Verwaltung“ statt Einstellungs-Dialog: Bereiche links, Einstellungen wirken sofort (kein Speichern-Knopf), öffentlicher Schlüssel klappt in der Karte auf
 - Alle Rückfragen (Löschen, Überschreiben) sind eigene Dialoge im selben Stil statt Windows-Meldungen
 - „Aus SSH-Config importieren“ sitzt jetzt im Dialog „Neuer Host“ statt als eigener Knopf in der Seitenleiste
+- Dateimanager: Rechtsklick auf eine Zeile öffnet ein Menü mit Öffnen oder Herunterladen, Umbenennen und Löschen; das Standardmenü des Browsers erscheint nirgends mehr (außer in Textfeldern)
 - Passphrase und Passwort lassen sich speichern: Haken im Dialog, abgelegt in der Windows-Anmeldeinformationsverwaltung (verschlüsselt mit dem Windows-Konto, nie in `store.json`); stimmt ein gespeichertes Geheimnis nicht mehr, wird es verworfen und neu gefragt
 - Tastenton entfernt (samt Schalter in den Einstellungen)
 - Behoben: Enter in einem Dialogfeld löst die Hauptaktion aus (Entsperren, Speichern) statt „Abbrechen“ oder „Löschen“; dadurch schien die Passphrase nicht zu stimmen
+
+## 0.3.0 – 2026-11-12
 - Anmeldung mit Passwort: ein Host ohne Schlüsseldatei fragt nach dem Passwort (gemerkt nur im Arbeitsspeicher, nie gespeichert); Server, die nur Schlüssel erlauben, bekommen eine klare Meldung
 - „Einstellungen“ ist jetzt ein Fenster mit drei Bereichen: Einstellungen, Schlüssel, Bekannte Hosts
 - Schlüssel: Liste aus `~/.ssh` mit Typ, Fingerabdruck, Passphrase-Schutz und zugehörigen Hosts; öffentlichen Schlüssel anzeigen und kopieren, neuen ED25519-Schlüssel erzeugen (überschreibt nie etwas), Schlüssel löschen mit Rückfrage; das Host-Formular bietet die Schlüssel zur Auswahl an
