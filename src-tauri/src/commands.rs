@@ -39,13 +39,14 @@ pub struct App {
     dir: PathBuf,
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
-    /// Passphrasen je Schlüsseldatei, nur im Arbeitsspeicher und nur bis Lotse beendet wird.
-    passphrases: Mutex<HashMap<String, String>>,
+    /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
+    /// nur im Arbeitsspeicher und nur bis Lotse beendet wird.
+    secrets: Mutex<HashMap<String, String>>,
 }
 
 impl App {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), passphrases: Mutex::default() }
+        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), secrets: Mutex::default() }
     }
 
     fn conn(&self, id: u32) -> Result<Arc<Conn>, String> {
@@ -66,29 +67,44 @@ fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt.
+fn secret_slot(host: &Host) -> String {
+    if host.key_path.is_empty() {
+        format!("{}@{}:{}", host.user, host.address, host.port)
+    } else {
+        host.key_path.clone()
+    }
+}
+
 #[tauri::command]
 pub async fn ssh_connect(
     app: State<'_, App>,
     host: Host,
-    passphrase: Option<String>,
+    secret: Option<String>,
     trust: Option<String>,
     cols: u32,
     rows: u32,
     on_data: Channel<InvokeResponseBody>,
 ) -> Result<u32, ConnectError> {
-    // Ohne Eingabe die gemerkte Passphrase probieren, damit Neuverbinden und weitere Reiter nicht nachfragen.
-    let typed = passphrase.is_some();
-    let passphrase = passphrase.or_else(|| app.passphrases.lock().unwrap().get(&host.key_path).cloned());
-    let handle = match ssh::connect(&host, passphrase.as_deref(), trust, app.known_hosts()).await {
+    // Ohne Eingabe das gemerkte Geheimnis probieren, damit Neuverbinden und weitere Reiter nicht nachfragen.
+    let typed = secret.is_some();
+    let slot = secret_slot(&host);
+    let secret = secret.or_else(|| app.secrets.lock().unwrap().get(&slot).cloned());
+    let handle = match ssh::connect(&host, secret.as_deref(), trust, app.known_hosts()).await {
         Ok(handle) => handle,
+        // Das gemerkte Geheimnis stimmt nicht mehr: verwerfen und neu fragen, ohne „war falsch“.
         Err(ConnectError::NeedPassphrase { .. }) if !typed => {
-            app.passphrases.lock().unwrap().remove(&host.key_path);
+            app.secrets.lock().unwrap().remove(&slot);
             return Err(ConnectError::NeedPassphrase { wrong: false });
+        }
+        Err(ConnectError::NeedPassword { .. }) if !typed => {
+            app.secrets.lock().unwrap().remove(&slot);
+            return Err(ConnectError::NeedPassword { wrong: false });
         }
         Err(e) => return Err(e),
     };
-    if let Some(passphrase) = passphrase {
-        app.passphrases.lock().unwrap().insert(host.key_path.clone(), passphrase);
+    if let Some(secret) = secret {
+        app.secrets.lock().unwrap().insert(slot, secret);
     }
     let (reader, shell) = ssh::open_shell(&handle, cols, rows)
         .await

@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.3.0 – 2026-11-12
+- Anmeldung mit Passwort: ein Host ohne Schlüsseldatei fragt nach dem Passwort (gemerkt nur im Arbeitsspeicher, nie gespeichert); Server, die nur Schlüssel erlauben, bekommen eine klare Meldung
+
 ## 0.2.0 – 2026-11-12
 Alltags-Szenarien durchgespielt und nachgebessert.
 - Passphrase wird je Schlüssel bis zum Beenden gemerkt (nur im Arbeitsspeicher): Neuverbinden und weitere Reiter fragen nicht erneut

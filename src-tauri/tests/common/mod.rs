@@ -1,4 +1,4 @@
-//! Eingebauter SSH-Server für Tests: nimmt genau einen Schlüssel an, schickt Shell-Eingaben zurück
+//! Eingebauter SSH-Server für Tests: nimmt genau einen Schlüssel oder das Testpasswort an, schickt Shell-Eingaben zurück
 //! und reicht SFTP an den `sftp-server` von Git für Windows weiter (falls installiert).
 #![allow(dead_code)]
 
@@ -13,15 +13,19 @@ use std::{
 use russh::{
     keys::{ssh_key::LineEnding, Algorithm, PrivateKey, PublicKey},
     server::{self, Auth, Msg, Server as _, Session, VerifiedPublicKey},
-    Channel, ChannelId,
+    Channel, ChannelId, MethodKind, MethodSet,
 };
 use tokio::net::TcpListener;
 
 pub const SFTP_SERVER: &str = "C:/Program Files/Git/usr/lib/ssh/sftp-server.exe";
+/// Das einzige Passwort, das der Testserver annimmt (für jeden Benutzer).
+pub const PASSWORD: &str = "testpasswort";
 const BASH: &str = "C:/Program Files/Git/usr/bin/bash.exe";
 
 struct Echo {
     allowed: PublicKey,
+    /// Ob Anmeldung mit Passwort erlaubt ist.
+    password: bool,
     /// Startordner für SFTP.
     dir: PathBuf,
     /// Geöffnete Kanäle, bis feststeht, ob sie Shell oder SFTP werden.
@@ -30,15 +34,15 @@ struct Echo {
 }
 
 impl Echo {
-    fn new(allowed: PublicKey, dir: PathBuf) -> Self {
-        Self { allowed, dir, pending: HashMap::new(), shells: HashSet::new() }
+    fn new(allowed: PublicKey, password: bool, dir: PathBuf) -> Self {
+        Self { allowed, password, dir, pending: HashMap::new(), shells: HashSet::new() }
     }
 }
 
 impl server::Server for Echo {
     type Handler = Self;
     fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> Self {
-        Echo::new(self.allowed.clone(), self.dir.clone())
+        Echo::new(self.allowed.clone(), self.password, self.dir.clone())
     }
 }
 
@@ -47,6 +51,15 @@ impl server::Handler for Echo {
 
     async fn auth_publickey(&mut self, _user: &str, key: VerifiedPublicKey<'_>) -> Result<Auth, Self::Error> {
         Ok(if key.public_key.key_data() == self.allowed.key_data() { Auth::Accept } else { Auth::reject() })
+    }
+
+    async fn auth_password(&mut self, _user: &str, password: &str) -> Result<Auth, Self::Error> {
+        Ok(if self.password && password == PASSWORD {
+            Auth::Accept
+        } else {
+            // Wie OpenSSH: nach einem falschen Passwort bleibt die Methode im Angebot (russh striche sie sonst).
+            Auth::Reject { proceed_with_methods: Some(methods(self.password)), partial_success: false }
+        })
     }
 
     async fn channel_open_session(
@@ -123,6 +136,12 @@ impl server::Handler for Echo {
     }
 }
 
+fn methods(password: bool) -> MethodSet {
+    let kinds: &[MethodKind] =
+        if password { &[MethodKind::PublicKey, MethodKind::Password] } else { &[MethodKind::PublicKey] };
+    MethodSet::from(kinds)
+}
+
 pub fn new_key() -> PrivateKey {
     PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519).unwrap()
 }
@@ -142,10 +161,20 @@ pub fn write_key(name: &str, key: &PrivateKey) -> String {
 /// Startet den Server (Port 0 = freier Port) und gibt Port und Host-Schlüssel zurück.
 /// `dir` ist der Startordner für SFTP.
 pub async fn start_server(allowed: PublicKey, port: u16, dir: PathBuf) -> (u16, PublicKey) {
+    start(allowed, true, port, dir).await
+}
+
+/// Wie `start_server`, aber der Server erlaubt nur Schlüssel, kein Passwort.
+pub async fn start_key_only_server(allowed: PublicKey, dir: PathBuf) -> (u16, PublicKey) {
+    start(allowed, false, 0, dir).await
+}
+
+async fn start(allowed: PublicKey, password: bool, port: u16, dir: PathBuf) -> (u16, PublicKey) {
     let host_key = new_key();
     let public = host_key.public_key().clone();
     let config = Arc::new(server::Config {
         keys: vec![host_key],
+        methods: methods(password),
         auth_rejection_time: Duration::from_millis(10),
         auth_rejection_time_initial: Some(Duration::ZERO),
         ..Default::default()
@@ -153,7 +182,7 @@ pub async fn start_server(allowed: PublicKey, port: u16, dir: PathBuf) -> (u16, 
     let socket = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
     let port = socket.local_addr().unwrap().port();
     tokio::spawn(async move {
-        let mut server = Echo::new(allowed, dir);
+        let mut server = Echo::new(allowed, password, dir);
         server.run_on_socket(config, &socket).await.unwrap();
     });
     (port, public)

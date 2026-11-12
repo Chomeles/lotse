@@ -1,11 +1,11 @@
 //! Prüft den Verbindungsweg gegen einen eingebauten SSH-Server, der alles zurückschickt:
-//! Host-Schlüssel-Prüfung, Anmeldung mit Schlüssel und Passphrase, Daten durch die Shell.
+//! Host-Schlüssel-Prüfung, Anmeldung mit Schlüssel, Passphrase oder Passwort, Daten durch die Shell.
 
 mod common;
 
 use std::time::Duration;
 
-use common::{new_key, start_server, temp, write_key};
+use common::{new_key, start_key_only_server, start_server, temp, write_key, PASSWORD};
 use lotse::{
     known_hosts,
     ssh::{self, ConnectError},
@@ -122,4 +122,39 @@ async fn nicht_erreichbar_wird_verstaendlich_gemeldet() {
         panic!("öffentlicher Schlüssel wurde angenommen")
     };
     assert!(message.contains("öffentliche Schlüssel"), "{message}");
+}
+
+#[tokio::test]
+async fn anmelden_mit_passwort() {
+    let (port, host_key) = start_server(new_key().public_key().clone(), 0, temp("")).await;
+    let known = temp("known_hosts_passwort");
+    let _ = std::fs::remove_file(&known);
+    // Ohne Schlüsseldatei meldet sich der Host mit Passwort an.
+    let host = Host { name: "neu".into(), address: "127.0.0.1".into(), port, user: "root".into(), key_path: String::new() };
+    let connect = |host: Host, password: Option<&'static str>, trust: Option<String>| {
+        let known = known.clone();
+        async move { ssh::connect(&host, password, trust, known).await.map(|_| ()) }
+    };
+
+    // Der Server-Schlüssel wird vor dem Passwort geprüft: unbekannter Host bricht ab, auch mit richtigem Passwort.
+    let shown = known_hosts::fingerprint(&host_key);
+    assert_eq!(
+        connect(host.clone(), Some(PASSWORD), None).await,
+        Err(ConnectError::UnknownHost { fingerprint: shown.clone() })
+    );
+
+    assert_eq!(connect(host.clone(), None, Some(shown)).await, Err(ConnectError::NeedPassword { wrong: false }));
+    assert_eq!(connect(host.clone(), Some("falsch"), None).await, Err(ConnectError::NeedPassword { wrong: true }));
+    assert_eq!(connect(host.clone(), Some(PASSWORD), None).await, Ok(()));
+
+    // Server, der nur Schlüssel erlaubt: klare Meldung statt Passwort-Frage, mit und ohne Passwort.
+    let (port, host_key) = start_key_only_server(new_key().public_key().clone(), temp("")).await;
+    let host = Host { port, ..host };
+    let shown = known_hosts::fingerprint(&host_key);
+    for password in [None, Some(PASSWORD)] {
+        let Err(ConnectError::Other { message }) = connect(host.clone(), password, Some(shown.clone())).await else {
+            panic!("Passwort-Frage trotz Server ohne Passwort-Anmeldung")
+        };
+        assert!(message.contains("keine Anmeldung mit Passwort"), "{message}");
+    }
 }

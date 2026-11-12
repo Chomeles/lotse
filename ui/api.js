@@ -7,15 +7,16 @@ export const api = {
   hostsImport: (existing) => invoke('hosts_import', { existing }),
   knownHostRemove: (address, port) => invoke('known_host_remove', { address, port }),
 
-  // Liefert die Verbindungsnummer. `onData` bekommt Bytes der Shell, `onClose` meldet das Ende.
-  sshConnect(host, { passphrase, trust, cols, rows }, onData, onClose) {
+  // Liefert die Verbindungsnummer. `secret` ist die Passphrase des Schlüssels oder das Passwort.
+  // `onData` bekommt Bytes der Shell, `onClose` meldet das Ende.
+  sshConnect(host, { secret, trust, cols, rows }, onData, onClose) {
     const channel = new Channel();
     channel.onmessage = (msg) => {
       if (msg instanceof ArrayBuffer) onData(new Uint8Array(msg));
       else if (Array.isArray(msg)) onData(Uint8Array.from(msg));
       else if (msg?.closed) onClose();
     };
-    return invoke('ssh_connect', { host, passphrase, trust, cols, rows, onData: channel });
+    return invoke('ssh_connect', { host, secret, trust, cols, rows, onData: channel });
   },
   sshWrite: (id, data) => invoke('ssh_write', { id, data }),
   sshResize: (id, cols, rows) => invoke('ssh_resize', { id, cols, rows }),

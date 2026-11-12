@@ -6,8 +6,8 @@ use std::{
 
 use russh::{
     client,
-    keys::{load_secret_key, PrivateKeyWithHashAlg, PublicKeyOrCertificate},
-    ChannelMsg, ChannelReadHalf, ChannelWriteHalf,
+    keys::{load_secret_key, PrivateKey, PrivateKeyWithHashAlg, PublicKeyOrCertificate},
+    ChannelMsg, ChannelReadHalf, ChannelWriteHalf, MethodKind,
 };
 use serde::Serialize;
 
@@ -26,6 +26,7 @@ pub enum ConnectError {
     UnknownHost { fingerprint: String },
     HostChanged { fingerprint: String, old: Vec<String> },
     NeedPassphrase { wrong: bool },
+    NeedPassword { wrong: bool },
     Other { message: String },
 }
 
@@ -72,37 +73,17 @@ impl client::Handler for Client {
     }
 }
 
-/// Baut die Verbindung auf und meldet sich mit dem Schlüssel des Hosts an.
+/// Baut die Verbindung auf und meldet sich an: mit dem Schlüssel des Hosts oder, wenn keiner eingetragen ist,
+/// mit Passwort. `secret` ist die Passphrase des Schlüssels oder das Passwort.
 /// `trust` ist der Fingerabdruck, den der Nutzer für einen unbekannten Host bestätigt hat.
 pub async fn connect(
     host: &Host,
-    passphrase: Option<&str>,
+    secret: Option<&str>,
     trust: Option<String>,
     known_hosts: PathBuf,
 ) -> Result<Handle, ConnectError> {
     // Schlüssel zuerst: ohne ihn lohnt sich die Verbindung nicht.
-    let key_path = expand_home(&host.key_path);
-    if key_path.extension().is_some_and(|ext| ext == "pub") {
-        return Err(other(format!(
-            "{} ist der öffentliche Schlüssel. Wähle die gleichnamige Datei ohne „.pub“.",
-            host.key_path
-        )));
-    }
-    let key = match load_secret_key(&key_path, passphrase) {
-        Ok(key) => key,
-        Err(russh::keys::Error::KeyIsEncrypted) => return Err(ConnectError::NeedPassphrase { wrong: false }),
-        Err(russh::keys::Error::IO(e)) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(other(format!("Die Schlüsseldatei {} gibt es nicht.", host.key_path)))
-        }
-        Err(russh::keys::Error::IO(e)) => return Err(other(format!("Schlüsseldatei {} nicht lesbar: {e}", host.key_path))),
-        Err(_) if passphrase.is_some() => return Err(ConnectError::NeedPassphrase { wrong: true }),
-        Err(e) => {
-            return Err(other(format!(
-                "{} ist kein privater Schlüssel, den Lotse lesen kann (OpenSSH, PEM oder PuTTY-ppk): {e}",
-                host.key_path
-            )))
-        }
-    };
+    let key = if host.key_path.is_empty() { None } else { Some(load_key(host, secret)?) };
 
     let issue = Arc::new(Mutex::new(None));
     let config = Arc::new(client::Config {
@@ -126,7 +107,14 @@ pub async fn connect(
         Ok(Ok(handle)) => handle,
     };
 
+    // Ab hier ist der Server-Schlüssel geprüft; erst jetzt gehen Anmeldedaten auf die Leitung.
     let failed = |e: russh::Error| other(format!("Anmeldung fehlgeschlagen: {e}"));
+    let Some(key) = key else {
+        return match login_password(&mut handle, &host.user, secret).await.map_err(failed)? {
+            None => Ok(handle),
+            Some(e) => Err(e),
+        };
+    };
     let hash = handle.best_supported_rsa_hash().await.map_err(failed)?.flatten();
     let auth = handle
         .authenticate_publickey(host.user.as_str(), PrivateKeyWithHashAlg::new(Arc::new(key), hash))
@@ -139,6 +127,58 @@ pub async fn connect(
         )));
     }
     Ok(handle)
+}
+
+fn load_key(host: &Host, passphrase: Option<&str>) -> Result<PrivateKey, ConnectError> {
+    let key_path = expand_home(&host.key_path);
+    if key_path.extension().is_some_and(|ext| ext == "pub") {
+        return Err(other(format!(
+            "{} ist der öffentliche Schlüssel. Wähle die gleichnamige Datei ohne „.pub“.",
+            host.key_path
+        )));
+    }
+    match load_secret_key(&key_path, passphrase) {
+        Ok(key) => Ok(key),
+        Err(russh::keys::Error::KeyIsEncrypted) => Err(ConnectError::NeedPassphrase { wrong: false }),
+        Err(russh::keys::Error::IO(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(other(format!("Die Schlüsseldatei {} gibt es nicht.", host.key_path)))
+        }
+        Err(russh::keys::Error::IO(e)) => Err(other(format!("Schlüsseldatei {} nicht lesbar: {e}", host.key_path))),
+        Err(_) if passphrase.is_some() => Err(ConnectError::NeedPassphrase { wrong: true }),
+        Err(e) => Err(other(format!(
+            "{} ist kein privater Schlüssel, den Lotse lesen kann (OpenSSH, PEM oder PuTTY-ppk): {e}",
+            host.key_path
+        ))),
+    }
+}
+
+/// Meldet sich mit Passwort an. `None` heißt angemeldet, sonst steht da, woran es lag.
+// shortcut: nur die Methode „password“; Server, die das Passwort über „keyboard-interactive“ abfragen
+// (z. B. mit Einmalcode), bekommen die Meldung unten. Bei Bedarf `authenticate_keyboard_interactive_*` ergänzen.
+async fn login_password(
+    handle: &mut Handle,
+    user: &str,
+    password: Option<&str>,
+) -> Result<Option<ConnectError>, russh::Error> {
+    // Erst fragen, was der Server anbietet: so geht das Passwort nie an einen Server, der es gar nicht will,
+    // und statt einer endlosen Passwort-Abfrage kommt eine klare Meldung.
+    let methods = match handle.authenticate_none(user).await? {
+        client::AuthResult::Success => return Ok(None),
+        client::AuthResult::Failure { remaining_methods, .. } => remaining_methods,
+    };
+    if !methods.contains(&MethodKind::Password) {
+        let offered: Vec<&str> = methods.iter().map(Into::into).collect();
+        return Ok(Some(other(format!(
+            "Der Server erlaubt keine Anmeldung mit Passwort (er bietet an: {}). \
+             Trage im Host eine Schlüsseldatei ein.",
+            if offered.is_empty() { "nichts".to_string() } else { offered.join(", ") }
+        ))));
+    }
+    let Some(password) = password else {
+        return Ok(Some(ConnectError::NeedPassword { wrong: false }));
+    };
+    let auth = handle.authenticate_password(user, password).await?;
+    Ok(if auth.success() { None } else { Some(ConnectError::NeedPassword { wrong: true }) })
 }
 
 /// `~/` am Anfang meint den Benutzerordner, wie in der SSH-Config üblich.

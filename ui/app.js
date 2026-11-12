@@ -176,6 +176,20 @@ const askPassphrase = async (host, wrong) => {
   return action === 'ok' ? data.passphrase : null;
 };
 
+const askPassword = async (host, wrong) => {
+  const { action, data } = await openDialog(`
+    <h2>Passwort</h2>
+    <p>${esc(host.user)}@${esc(host.address)}</p>
+    ${wrong ? '<p class="warn">Das Passwort war falsch.</p>' : ''}
+    <label><span>Passwort (bleibt nur im Arbeitsspeicher, bis du Lotse beendest)</span>
+      <input name="password" type="password" required autocomplete="off" autofocus></label>
+    <div class="buttons">
+      <button value="" formnovalidate>Abbrechen</button>
+      <button value="ok" class="primary">Verbinden</button>
+    </div>`).done;
+  return action === 'ok' ? data.password : null;
+};
+
 const confirmHost = async (host, fingerprint) =>
   (await openDialog(`
     <h2>Unbekannter Host</h2>
@@ -198,20 +212,20 @@ const warnChanged = async (host, error) =>
       <button value="" autofocus>Abbrechen</button>
     </div>`).done).action === 'remove';
 
-// Verbindet den Reiter mit seinem Host und führt durch Passphrase und Host-Schlüssel-Fragen.
+// Verbindet den Reiter mit seinem Host und führt durch Passphrase, Passwort und Host-Schlüssel-Fragen.
 async function attach(tab) {
   const { host } = tab;
   const { term } = tab.terminal;
   if (tab.connecting || tab.id) return;
   tab.connecting = true;
-  let passphrase = null;
+  let secret = null;
   let trust = null;
   setStatus(tab, `Verbinde mit ${host.address} …`);
   for (;;) {
     try {
       tab.id = await api.sshConnect(
         host,
-        { passphrase, trust, cols: term.cols, rows: term.rows },
+        { secret, trust, cols: term.cols, rows: term.rows },
         (bytes) => term.write(bytes),
         () => markClosed(tab),
       );
@@ -222,8 +236,11 @@ async function attach(tab) {
       return;
     } catch (e) {
       if (e.kind === 'need_passphrase') {
-        passphrase = await askPassphrase(host, e.wrong);
-        if (passphrase === null) break;
+        secret = await askPassphrase(host, e.wrong);
+        if (secret === null) break;
+      } else if (e.kind === 'need_password') {
+        secret = await askPassword(host, e.wrong);
+        if (secret === null) break;
       } else if (e.kind === 'unknown_host') {
         if (!(await confirmHost(host, e.fingerprint))) break;
         trust = e.fingerprint;
@@ -240,8 +257,8 @@ async function attach(tab) {
 }
 
 async function connect(host) {
-  if (!host.user || !host.key_path) {
-    host = await edit(host, 'Zum Verbinden fehlen noch Benutzer oder Schlüsseldatei.');
+  if (!host.user) {
+    host = await edit(host, 'Zum Verbinden fehlt noch der Benutzer.');
     if (!host) return;
   }
   attach(openTab(host));

@@ -32,7 +32,8 @@ export async function editHost(host, hosts, hint = '') {
     <label><span>Port</span><input name="port" type="number" min="1" max="65535" required value="${h.port}"></label>
     <label><span>Benutzer</span><input name="user" required value="${esc(h.user)}"></label>
     <label><span>Schlüsseldatei (privater Schlüssel)</span>
-      <span class="row"><input name="key_path" required value="${esc(h.key_path)}"><button type="button" class="browse">Durchsuchen</button></span>
+      <span class="row"><input name="key_path" value="${esc(h.key_path)}" aria-describedby="key-hint"><button type="button" class="browse">Durchsuchen</button></span>
+      <small id="key-hint">Leer lassen = Anmeldung mit Passwort.</small>
     </label>
     <div class="buttons">
       ${host ? '<button value="remove" formnovalidate class="danger left">Löschen</button>' : ''}

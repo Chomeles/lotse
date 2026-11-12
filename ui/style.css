@@ -152,6 +152,7 @@ dialog p { margin: 0 0 10px; color: var(--muted); white-space: pre-wrap; overflo
 dialog p.warn { color: var(--red); }
 dialog label { display: block; margin-bottom: 10px; }
 dialog label span { display: block; margin-bottom: 3px; color: var(--muted); }
+dialog label small { display: block; margin-top: 3px; color: var(--muted); }
 dialog label.check { display: flex; gap: 8px; align-items: center; }
 input[type=checkbox] { width: auto; accent-color: var(--green); }
 dialog .row { display: flex; gap: 6px; }
