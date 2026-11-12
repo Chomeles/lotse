@@ -12,6 +12,15 @@ export function openDialog(html, cls = '') {
   dialog.className = cls;
   dialog.innerHTML = `<form method="dialog">${html}</form>`;
   document.body.append(dialog);
+  // Enter in einem Feld löst die Hauptaktion aus. Ohne das nimmt der Browser den ersten Knopf im Formular,
+  // und das ist „Abbrechen“ oder „Löschen“. Gibt es keine Hauptaktion, übernimmt Enter nur den Wert.
+  dialog.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.matches('input')) return;
+    e.preventDefault();
+    const main = dialog.querySelector('.acts .pri, .acts .dfill');
+    if (main) main.click();
+    else e.target.blur();
+  });
   dialog.showModal();
   const done = new Promise((resolve) => {
     dialog.addEventListener('close', () => {
