@@ -15,7 +15,7 @@ use lotse::{
 #[tokio::test]
 async fn verbinden_pruefen_anmelden_echo() {
     let client_key = new_key();
-    let (port, host_key) = start_server(client_key.public_key().clone(), 0).await;
+    let (port, host_key) = start_server(client_key.public_key().clone(), 0, temp("")).await;
     let shown = known_hosts::fingerprint(&host_key);
     let known = temp("known_hosts");
     let _ = std::fs::remove_file(&known);

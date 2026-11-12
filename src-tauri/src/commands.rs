@@ -9,13 +9,15 @@ use std::{
     },
 };
 
+use russh_sftp::client::SftpSession;
 use tauri::{
     ipc::{Channel, InvokeResponseBody},
     State,
 };
+use tokio::sync::OnceCell;
 
 use crate::{
-    hosts, known_hosts,
+    hosts, known_hosts, sftp,
     ssh::{self, ConnectError},
     store::{self, Host, Store},
 };
@@ -23,6 +25,14 @@ use crate::{
 struct Conn {
     handle: ssh::Handle,
     shell: ssh::ShellWriter,
+    sftp: OnceCell<SftpSession>,
+}
+
+impl Conn {
+    /// Der Dateikanal wird erst beim ersten Gebrauch geöffnet.
+    async fn sftp(&self) -> Result<&SftpSession, String> {
+        self.sftp.get_or_try_init(|| sftp::open(&self.handle)).await
+    }
 }
 
 pub struct App {
@@ -70,7 +80,7 @@ pub async fn ssh_connect(
         .map_err(|e| ConnectError::Other { message: format!("Die Shell ließ sich nicht öffnen: {e}") })?;
 
     let id = app.next_id.fetch_add(1, Ordering::Relaxed);
-    app.conns.lock().unwrap().insert(id, Arc::new(Conn { handle, shell }));
+    app.conns.lock().unwrap().insert(id, Arc::new(Conn { handle, shell, sftp: OnceCell::new() }));
     let conns = app.conns.clone();
     tauri::async_runtime::spawn(async move {
         ssh::pump(reader, |data| {
@@ -123,4 +133,58 @@ pub fn hosts_import(existing: Vec<String>) -> Result<Vec<Host>, String> {
     let path = std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh").join("config");
     let file = std::fs::File::open(&path).map_err(|e| format!("{} nicht lesbar: {e}", path.display()))?;
     hosts::import(&mut std::io::BufReader::new(file), &existing)
+}
+
+#[tauri::command]
+pub async fn sftp_list(app: State<'_, App>, id: u32, path: Option<String>) -> Result<sftp::Listing, String> {
+    sftp::list(app.conn(id)?.sftp().await?, path.as_deref()).await
+}
+
+/// Meldet den Fortschritt nur, wenn sich die Prozentzahl ändert.
+fn percent(on_progress: Channel<u8>) -> impl FnMut(u64, u64) {
+    let mut last = u8::MAX;
+    move |done, total| {
+        let now = if total == 0 { 100 } else { (done * 100 / total) as u8 };
+        if now != last {
+            last = now;
+            let _ = on_progress.send(now);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn sftp_upload(
+    app: State<'_, App>,
+    id: u32,
+    local: PathBuf,
+    remote: String,
+    on_progress: Channel<u8>,
+) -> Result<(), String> {
+    sftp::upload(app.conn(id)?.sftp().await?, &local, &remote, percent(on_progress)).await
+}
+
+#[tauri::command]
+pub async fn sftp_download(
+    app: State<'_, App>,
+    id: u32,
+    remote: String,
+    local: PathBuf,
+    on_progress: Channel<u8>,
+) -> Result<(), String> {
+    sftp::download(app.conn(id)?.sftp().await?, &remote, &local, percent(on_progress)).await
+}
+
+#[tauri::command]
+pub async fn sftp_rename(app: State<'_, App>, id: u32, from: String, to: String) -> Result<(), String> {
+    sftp::rename(app.conn(id)?.sftp().await?, &from, &to).await
+}
+
+#[tauri::command]
+pub async fn sftp_mkdir(app: State<'_, App>, id: u32, path: String) -> Result<(), String> {
+    sftp::mkdir(app.conn(id)?.sftp().await?, &path).await
+}
+
+#[tauri::command]
+pub async fn sftp_delete(app: State<'_, App>, id: u32, path: String, is_dir: bool) -> Result<(), String> {
+    sftp::delete(app.conn(id)?.sftp().await?, &path, is_dir).await
 }

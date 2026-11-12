@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { alertBox, esc, openDialog } from './dialog.js';
+import { createFiles } from './views/files.js';
 import { editHost, renderHosts } from './views/hosts.js';
 import { editSettings } from './views/settings.js';
 import { applySettings, createTerminal } from './views/terminal.js';
@@ -103,10 +104,12 @@ function openTab(host) {
   pane.className = 'pane';
   pane.innerHTML = `
     <div class="pane-bar">
+      <button type="button" data-view="term" aria-pressed="true">Terminal</button>
+      <button type="button" data-view="files" aria-pressed="false">Dateien</button>
       <span class="status" role="status"></span>
       <button type="button" class="reconnect" hidden>Neu verbinden</button>
     </div>
-    <div class="pane-body"><div class="term-view"></div></div>`;
+    <div class="pane-body"><div class="term-view"></div><div class="files-view" hidden></div></div>`;
   $('tabs').append(button);
   $('panes').append(pane);
 
@@ -122,6 +125,18 @@ function openTab(host) {
   });
   term.onResize(({ cols, rows }) => {
     if (tab.id) api.sshResize(tab.id, cols, rows).catch(() => {});
+  });
+
+  // Umschalten zwischen Terminal und Dateien. Der Dateimanager entsteht beim ersten Öffnen.
+  pane.querySelector('.pane-bar').addEventListener('click', (e) => {
+    const { view } = e.target.dataset;
+    if (!view) return;
+    for (const b of pane.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', b.dataset.view === view);
+    pane.querySelector('.term-view').hidden = view !== 'term';
+    pane.querySelector('.files-view').hidden = view !== 'files';
+    if (view === 'term') return term.focus();
+    tab.files ??= createFiles(pane.querySelector('.files-view'), () => tab.id);
+    tab.files.show();
   });
 
   button.querySelector('.name').addEventListener('click', () => selectTab(tab));

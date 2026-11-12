@@ -1,0 +1,78 @@
+//! Prüft den Dateimanager gegen den echten `sftp-server` von Git für Windows.
+//! Fehlt der auf dem Rechner, wird der Test übersprungen.
+
+mod common;
+
+use common::{new_key, start_server, temp, write_key, SFTP_SERVER};
+use lotse::{sftp, ssh, store::Host};
+
+#[tokio::test]
+async fn ordner_hochladen_herunterladen_umbenennen_loeschen() {
+    if !std::path::Path::new(SFTP_SERVER).exists() {
+        eprintln!("übersprungen: {SFTP_SERVER} fehlt");
+        return;
+    }
+    let remote_dir = temp("sftp-remote");
+    let _ = std::fs::remove_dir_all(&remote_dir);
+    std::fs::create_dir_all(&remote_dir).unwrap();
+
+    let key = new_key();
+    let (port, host_key) = start_server(key.public_key().clone(), 0, remote_dir.clone()).await;
+    let host = Host {
+        name: "test".into(),
+        address: "127.0.0.1".into(),
+        port,
+        user: "tester".into(),
+        key_path: write_key("id_sftp", &key),
+    };
+    let known = temp("known_hosts_sftp");
+    let _ = std::fs::remove_file(&known);
+    let trust = Some(lotse::known_hosts::fingerprint(&host_key));
+    let handle = ssh::connect(&host, None, trust, known).await.unwrap();
+    let sftp = sftp::open(&handle).await.unwrap();
+
+    // Startordner ist leer.
+    let start = sftp::list(&sftp, None).await.unwrap();
+    assert!(start.entries.is_empty(), "{start:?}");
+    let base = start.path;
+
+    // Ordner anlegen, Datei hochladen: Fortschritt endet bei der vollen Größe.
+    let content: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    let local = temp("hoch.bin");
+    std::fs::write(&local, &content).unwrap();
+    sftp::mkdir(&sftp, &format!("{base}/ordner")).await.unwrap();
+    let mut steps = vec![];
+    sftp::upload(&sftp, &local, &format!("{base}/ordner/datei.bin"), |done, total| steps.push((done, total)))
+        .await
+        .unwrap();
+    assert_eq!(steps.last(), Some(&(200_000, 200_000)));
+    assert_eq!(std::fs::read(remote_dir.join("ordner/datei.bin")).unwrap(), content);
+
+    // Auflistung: Ordner zuerst, Größe stimmt, ".." wird aufgelöst.
+    std::fs::write(remote_dir.join("a.txt"), "x").unwrap();
+    let top = sftp::list(&sftp, Some(&base)).await.unwrap();
+    let names: Vec<_> = top.entries.iter().map(|e| (e.name.as_str(), e.is_dir)).collect();
+    assert_eq!(names, [("ordner", true), ("a.txt", false)]);
+    let inner = sftp::list(&sftp, Some(&format!("{base}/ordner/../ordner"))).await.unwrap();
+    assert_eq!(inner.path, format!("{base}/ordner"));
+    assert_eq!((inner.entries[0].name.as_str(), inner.entries[0].size), ("datei.bin", 200_000));
+
+    // Herunterladen liefert dieselben Bytes und hinterlässt keine .part-Datei.
+    let back = temp("runter.bin");
+    sftp::download(&sftp, &format!("{base}/ordner/datei.bin"), &back, |_, _| {}).await.unwrap();
+    assert_eq!(std::fs::read(&back).unwrap(), content);
+    assert!(!temp("runter.bin.part").exists());
+
+    // Schlägt das Herunterladen fehl, bleibt eine vorhandene Datei unverändert.
+    assert!(sftp::download(&sftp, &format!("{base}/gibt-es-nicht"), &back, |_, _| {}).await.is_err());
+    assert_eq!(std::fs::read(&back).unwrap(), content);
+
+    // Umbenennen und Löschen. Ein voller Ordner lässt sich nicht löschen.
+    sftp::rename(&sftp, &format!("{base}/a.txt"), &format!("{base}/b.txt")).await.unwrap();
+    assert!(remote_dir.join("b.txt").exists() && !remote_dir.join("a.txt").exists());
+    assert!(sftp::delete(&sftp, &format!("{base}/ordner"), true).await.is_err());
+    sftp::delete(&sftp, &format!("{base}/ordner/datei.bin"), false).await.unwrap();
+    sftp::delete(&sftp, &format!("{base}/ordner"), true).await.unwrap();
+    sftp::delete(&sftp, &format!("{base}/b.txt"), false).await.unwrap();
+    assert!(sftp::list(&sftp, None).await.unwrap().entries.is_empty());
+}
