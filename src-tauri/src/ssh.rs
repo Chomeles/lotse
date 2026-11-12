@@ -254,7 +254,7 @@ pub async fn exec(handle: &Handle, command: &str) -> Result<(), String> {
 }
 
 /// Setzt einen Pfad so in einfache Anführungszeichen, dass die Shell ihn wörtlich nimmt.
-fn quote(path: &str) -> String {
+pub fn quote(path: &str) -> String {
     format!("'{}'", path.replace('\'', "'\\''"))
 }
 

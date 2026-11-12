@@ -2,6 +2,7 @@ mod commands;
 pub mod hosts;
 pub mod keys;
 pub mod known_hosts;
+pub mod paste;
 pub mod sftp;
 pub mod ssh;
 pub mod store;
@@ -42,6 +43,9 @@ pub fn run() {
             commands::sftp_rename,
             commands::sftp_mkdir,
             commands::sftp_delete,
+            commands::paste_file,
+            commands::paste_image,
+            commands::transfer_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("Fenster konnte nicht starten");

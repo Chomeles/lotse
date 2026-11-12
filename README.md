@@ -16,7 +16,7 @@ cargo tauri build    # Installer unter target/release/bundle/nsis
 Die Oberfläche in `ui/` wird beim Kompilieren eingebettet. Nach Änderungen dort einfach neu `cargo run`.
 
 ## Aufbau
-- `src-tauri/src/`: je Funktion eine Datei (`ssh.rs`, `known_hosts.rs`, `keys.rs`, `sftp.rs`, `hosts.rs`, `store.rs`). Nur `commands.rs` kennt Tauri.
+- `src-tauri/src/`: je Funktion eine Datei (`ssh.rs`, `known_hosts.rs`, `keys.rs`, `sftp.rs`, `paste.rs`, `hosts.rs`, `store.rs`). Nur `commands.rs` kennt Tauri.
 - `ui/`: `app.js` (Reiter, Verbinden), `api.js` (alle Aufrufe ans Backend), `views/` (je Ansicht eine Datei), `theme.js` (Farben), `sound.js` (Tastenton).
 - Neue Funktion = neue Rust-Datei, ein paar Zeilen in `commands.rs` und `lib.rs`, eine Ansicht.
 

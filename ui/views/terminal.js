@@ -56,8 +56,9 @@ function highlightIps(term) {
   });
 }
 
-// Baut ein Terminal samt Suchleiste in `parent`. `onFontSize(delta)` meldet Strg + Plus/Minus (0 = zurücksetzen).
-export function createTerminal(parent, settings, onFontSize) {
+// Baut ein Terminal samt Suchleiste in `parent`. `onFontSize(delta)` meldet Strg + Plus/Minus (0 = zurücksetzen),
+// `onPasteNoText()` ein Einfügen, bei dem die Zwischenablage keinen Text enthält (dann vielleicht ein Bild).
+export function createTerminal(parent, settings, onFontSize, onPasteNoText) {
   parent.innerHTML = `
     <div class="search" hidden>
       <input type="search" placeholder="Suchen" aria-label="Im Terminal suchen">
@@ -97,6 +98,7 @@ export function createTerminal(parent, settings, onFontSize) {
   const paste = async () => {
     const text = await readText().catch(() => '');
     if (text) term.paste(text);
+    else onPasteNoText?.();
   };
   parent.querySelector('.term').addEventListener('contextmenu', (e) => {
     e.preventDefault();

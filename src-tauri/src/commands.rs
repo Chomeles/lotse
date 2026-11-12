@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex,
     },
 };
@@ -12,12 +12,13 @@ use std::{
 use russh_sftp::client::SftpSession;
 use tauri::{
     ipc::{Channel, InvokeResponseBody},
-    State,
+    AppHandle, State,
 };
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::sync::OnceCell;
 
 use crate::{
-    hosts, keys, known_hosts, sftp,
+    hosts, keys, known_hosts, paste, sftp,
     ssh::{self, ConnectError},
     store::{self, Host, Store},
 };
@@ -42,16 +43,23 @@ pub struct App {
     /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
     /// nur im Arbeitsspeicher und nur bis Lotse beendet wird.
     secrets: Mutex<HashMap<String, String>>,
+    /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
+    transfers: Mutex<HashMap<u32, Arc<AtomicBool>>>,
 }
 
 impl App {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), secrets: Mutex::default() }
+        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), secrets: Mutex::default(), transfers: Mutex::default() }
     }
 
     fn conn(&self, id: u32) -> Result<Arc<Conn>, String> {
         let conns = self.conns.lock().unwrap();
         conns.get(&id).cloned().ok_or_else(|| "Die Verbindung besteht nicht mehr.".to_string())
+    }
+
+    /// Das Kennzeichen entsteht beim Start oder beim Abbrechen, je nachdem, was zuerst ankommt.
+    fn transfer(&self, transfer: u32) -> Arc<AtomicBool> {
+        self.transfers.lock().unwrap().entry(transfer).or_default().clone()
     }
 
     fn known_hosts(&self) -> PathBuf {
@@ -281,4 +289,59 @@ pub async fn sftp_delete(app: State<'_, App>, id: u32, path: String, is_dir: boo
     } else {
         ssh::remove_tree(&conn.handle, &path).await
     }
+}
+
+/// Lädt eine lokale Datei in den Einfüge-Ordner und liefert ihren Pfad auf dem Server als Text fürs Terminal.
+#[tauri::command]
+pub async fn paste_file(
+    app: State<'_, App>,
+    id: u32,
+    transfer: u32,
+    local: PathBuf,
+    dir: String,
+    on_progress: Channel<u8>,
+) -> Result<String, String> {
+    let cancel = app.transfer(transfer);
+    let result = async {
+        let conn = app.conn(id)?;
+        paste::upload_file(conn.sftp().await?, &dir, &local, &cancel, percent(on_progress)).await
+    }
+    .await;
+    app.transfers.lock().unwrap().remove(&transfer);
+    result.map(|path| paste::shell_word(&path))
+}
+
+/// Wie `paste_file`, aber mit dem Bild aus der Zwischenablage. `None`, wenn dort kein Bild liegt.
+#[tauri::command]
+pub async fn paste_image(
+    app: State<'_, App>,
+    handle: AppHandle,
+    id: u32,
+    transfer: u32,
+    dir: String,
+    name: String,
+    on_progress: Channel<u8>,
+) -> Result<Option<String>, String> {
+    // Lesen und Kodieren dauern bei großen Bildschirmfotos spürbar, also nicht auf dem Netzwerk-Thread.
+    let png = tauri::async_runtime::spawn_blocking(move || {
+        let image = handle.clipboard().read_image().ok()?;
+        Some(paste::encode_png(image.rgba(), image.width(), image.height()))
+    })
+    .await
+    .map_err(text)?;
+    let Some(png) = png else { return Ok(None) };
+    let png = png?;
+    let cancel = app.transfer(transfer);
+    let result = async {
+        let conn = app.conn(id)?;
+        paste::upload_bytes(conn.sftp().await?, &dir, &name, &png, &cancel, percent(on_progress)).await
+    }
+    .await;
+    app.transfers.lock().unwrap().remove(&transfer);
+    result.map(|path| Some(paste::shell_word(&path)))
+}
+
+#[tauri::command]
+pub fn transfer_cancel(app: State<'_, App>, transfer: u32) {
+    app.transfer(transfer).store(true, Ordering::Relaxed);
 }

@@ -109,8 +109,9 @@ export function createFiles(el, getId) {
       await api.sftpDelete(getId(), join(entry.name), entry.is_dir);
       await load(path);
     },
-    async upload() {
-      const locals = await window.__TAURI__.dialog.open({ title: 'Dateien hochladen', multiple: true });
+    // `dropped` sind hereingezogene Dateien; ohne sie fragt der Auswahldialog.
+    async upload(_, dropped) {
+      const locals = dropped ?? await window.__TAURI__.dialog.open({ title: 'Dateien hochladen', multiple: true });
       if (!locals?.length) return;
       let done = 0;
       try {
@@ -136,13 +137,13 @@ export function createFiles(el, getId) {
   };
 
   // Führt eine Aktion aus, immer nur eine zur Zeit, und zeigt Ergebnis oder Fehler in der Statuszeile.
-  async function run(act, entry) {
+  async function run(act, entry, extra) {
     if (!actions[act]) return;
     if (busy) return say('Bitte warten, es läuft noch ein Vorgang.');
     if (!getId()) return say('Nicht verbunden.', true);
     busy = true;
     try {
-      say((await actions[act](entry)) ?? '');
+      say((await actions[act](entry, extra)) ?? '');
     } catch (e) {
       say(String(e), true);
     } finally {
@@ -155,5 +156,5 @@ export function createFiles(el, getId) {
     if (e.key === 'Enter') run('go');
   });
 
-  return { show: () => run('reload') };
+  return { show: () => run('reload'), drop: (paths) => run('upload', undefined, paths) };
 }

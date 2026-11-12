@@ -15,6 +15,9 @@ export async function openSettings(settings, hosts) {
         <input name="scrollback" type="number" min="100" max="1000000" step="100" required value="${settings.scrollback}" autofocus></label>
       <label><span>Schriftgröße (auch mit Strg + Plus/Minus)</span>
         <input name="font_size" type="number" min="8" max="40" required value="${settings.font_size}"></label>
+      <label><span>Ordner auf dem Server für ins Terminal gezogene oder eingefügte Dateien und Bilder</span>
+        <input name="paste_dir" required value="${esc(settings.paste_dir)}" spellcheck="false" aria-describedby="paste-hint">
+        <small id="paste-hint">~/ meint den Startordner des angemeldeten Benutzers. Der Ordner wird bei Bedarf angelegt.</small></label>
       <label class="check"><input name="typing_sound" type="checkbox" ${settings.typing_sound ? 'checked' : ''}> Leiser Tastenton beim Tippen</label>
     </section>
     <section data-area="keys" hidden>
@@ -146,6 +149,7 @@ export async function openSettings(settings, hosts) {
     scrollback: Number(data.scrollback),
     font_size: Number(data.font_size),
     typing_sound: data.typing_sound === 'on',
+    paste_dir: data.paste_dir.trim(),
   };
 }
 

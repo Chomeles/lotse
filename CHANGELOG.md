@@ -9,6 +9,7 @@ Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 - „Einstellungen“ ist jetzt ein Fenster mit drei Bereichen: Einstellungen, Schlüssel, Bekannte Hosts
 - Schlüssel: Liste aus `~/.ssh` mit Typ, Fingerabdruck, Passphrase-Schutz und zugehörigen Hosts; öffentlichen Schlüssel anzeigen und kopieren, neuen ED25519-Schlüssel erzeugen (überschreibt nie etwas), Schlüssel löschen mit Rückfrage; das Host-Formular bietet die Schlüssel zur Auswahl an
 - IPv4-Adressen in der Terminal-Ausgabe erscheinen pink, wie in Termius; Farben vom Server bleiben
+- Datei ins Terminal ziehen oder Bild aus der Zwischenablage einfügen: Lotse lädt es im Hintergrund nach `~/lotse-paste` (einstellbar) und schreibt den Pfad an die Schreibmarke, z. B. für Claude Code auf dem Server; mit Fortschritt, Abbrechen und ohne je etwas zu überschreiben. Ziehen auf den Dateimanager lädt in den offenen Ordner
 - Bekannte Hosts: Liste mit Adresse, Port, Schlüsseltyp und Fingerabdruck, „Entfernen“ je Eintrag
 
 ## 0.2.0 – 2026-11-12

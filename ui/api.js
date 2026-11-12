@@ -41,6 +41,14 @@ export const api = {
     invoke('sftp_upload', { id, local, remote, onProgress: progress(onProgress) }),
   sftpDownload: (id, remote, local, onProgress) =>
     invoke('sftp_download', { id, remote, local, onProgress: progress(onProgress) }),
+
+  // Datei oder Bild der Zwischenablage in den Ordner `dir` auf dem Server legen. Liefert den Pfad als Text fürs
+  // Terminal (pasteImage: null, wenn kein Bild da ist). `transfer` ist eine frei gewählte Nummer zum Abbrechen.
+  pasteFile: (id, transfer, local, dir, onProgress) =>
+    invoke('paste_file', { id, transfer, local, dir, onProgress: progress(onProgress) }),
+  pasteImage: (id, transfer, dir, name, onProgress) =>
+    invoke('paste_image', { id, transfer, dir, name, onProgress: progress(onProgress) }),
+  transferCancel: (transfer) => invoke('transfer_cancel', { transfer }),
 };
 
 function progress(onProgress) {

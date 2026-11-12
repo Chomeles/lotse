@@ -121,6 +121,43 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .search[hidden] { display: none; }
 .search input { width: 200px; }
 
+/* Markierung beim Hereinziehen von Dateien */
+.pane-body[data-drop]::after {
+  content: attr(data-drop);
+  position: absolute;
+  inset: 6px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--green);
+  border-radius: 10px;
+  background: rgba(13, 17, 23, .8);
+  color: var(--green);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+/* Uploads ins Terminal: schmale Zeilen unten rechts */
+.uploads { position: absolute; right: 22px; bottom: 10px; z-index: 5; display: grid; gap: 4px; width: 320px; }
+.upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 3px 4px 3px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.upload[hidden] { display: none; }
+.upload .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload progress { width: 90px; height: 6px; accent-color: var(--green); }
+.upload button { background: none; border: 0; padding: 0 6px; color: var(--muted); }
+.upload.error { border-color: var(--red); }
+.upload .message { order: 3; flex-basis: 100%; color: var(--red); overflow-wrap: anywhere; }
+
 /* Dateimanager */
 .files-view { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .files-bar { display: flex; gap: 6px; padding: 8px; align-items: center; }

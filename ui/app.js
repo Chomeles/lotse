@@ -5,10 +5,11 @@ import { createFiles } from './views/files.js';
 import { editHost, renderHosts } from './views/hosts.js';
 import { openSettings } from './views/settings.js';
 import { applySettings, createTerminal } from './views/terminal.js';
+import { createUploads } from './views/uploads.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, typing_sound: true } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, typing_sound: true, paste_dir: '~/lotse-paste' } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -92,7 +93,9 @@ function markClosed(tab, text = 'Verbindung getrennt') {
 
 function closeTab(tab) {
   tabs.delete(tab);
-  if (tab.id) api.sshDisconnect(tab.id);
+  // Laufende Uploads abbrechen. Getrennt wird erst danach, damit der Server die halben Dateien noch löschen kann.
+  const { id } = tab;
+  tab.uploads.close().then(() => id && api.sshDisconnect(id));
   tab.terminal.dispose();
   tab.pane.remove();
   tab.button.remove();
@@ -122,8 +125,14 @@ function openTab(host) {
   tab.terminal = createTerminal(pane.querySelector('.term-view'), store.settings, (delta) => {
     const size = delta === 0 ? 14 : Math.min(40, Math.max(8, store.settings.font_size + delta));
     setSettings({ ...store.settings, font_size: size });
-  });
+  }, () => tab.uploads.image());
   const { term } = tab.terminal;
+  // Der Pfad geht den normalen Einfüge-Weg, ohne Zeilenende: Enter drückt der Nutzer selbst.
+  tab.uploads = createUploads(pane.querySelector('.term-view'), {
+    getId: () => tab.id,
+    getDir: () => store.settings.paste_dir,
+    onPath: (word) => term.paste(`${word} `),
+  });
   // Eingaben nacheinander schicken: gleichzeitige Aufrufe könnten sich sonst überholen.
   term.onData((data) => {
     if (!tab.id) {
@@ -263,6 +272,34 @@ async function connect(host) {
   }
   attach(openTab(host));
 }
+
+// ---------- Dateien hereinziehen ----------
+
+const activeTab = () => [...tabs].find((t) => !t.pane.hidden);
+
+// Aus dem Explorer aufs Fenster gezogene Dateien: über dem Terminal hochladen und den Pfad einfügen,
+// über dem Dateimanager in den offenen Ordner hochladen.
+export function dropFiles(paths) {
+  const tab = activeTab();
+  if (!tab || document.querySelector('dialog')) return;
+  if (tab.pane.querySelector('.term-view').hidden) tab.files?.drop(paths);
+  else tab.uploads.files(paths);
+}
+
+window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
+  const pane = activeTab()?.pane;
+  const body = pane?.querySelector('.pane-body');
+  if (payload.type === 'enter' || payload.type === 'over') {
+    if (body) {
+      body.dataset.drop = pane.querySelector('.term-view').hidden
+        ? 'Hier ablegen: lädt in diesen Ordner hoch'
+        : 'Hier ablegen: lädt hoch und schreibt den Pfad ins Terminal';
+    }
+    return;
+  }
+  delete body?.dataset.drop;
+  if (payload.type === 'drop') dropFiles(payload.paths);
+});
 
 // ---------- Start ----------
 
