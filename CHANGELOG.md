@@ -4,6 +4,11 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.8.0 – 2026-11-13
+- Spracheingabe live: Der Text erscheint schon beim Sprechen, Wort für Wort, und wird nachgebessert, sobald mehr vom Satz bekannt ist. Nach einer Sprechpause steht ein Abschnitt fest. Der Mikrofon-Knopf ist nur noch an (rot) oder aus; er pulsiert mit der Lautstärke
+- Das Mikrofon bleibt an, bis man es ausschaltet (spätestens nach 10 Minuten)
+- Der Text wird wie getippt geschickt, nicht mehr als Einfügung: Korrekturen kommen als Rücktaste an
+
 ## 0.7.0 – 2026-11-13
 - Die Spracherkennung rechnet jetzt auf der Grafikkarte (Vulkan: AMD, NVIDIA, Intel). Gemessen auf einer Radeon RX 7900 XT braucht ein Satz von 5 Sekunden mit „Klein“ 0,1 s, „Mittel“ 0,2 s, „Groß“ 0,8 s, „Maximal“ 0,3 s. Ohne passende Grafikkarte rechnet wie bisher der Prozessor; zu installieren ist nichts
 - Verwaltung, Spracheingabe: zeigt, ob Grafikkarte oder Prozessor rechnet. Mit eigener Grafikkarte wird „Maximal“ empfohlen

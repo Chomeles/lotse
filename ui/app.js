@@ -194,10 +194,13 @@ function openTab(host) {
     getDir: () => store.settings.paste_dir,
     onPath: (word) => term.paste(`${word} `),
   });
-  // Spracheingabe: der erkannte Text geht den Einfüge-Weg an die Schreibmarke, ohne Enter.
+  // Spracheingabe: der Text wird wie getippt geschickt, ohne Enter. Rücktasten nehmen zurück, was die
+  // Erkennung nachbessert; als Einfügung (term.paste) kämen sie im Programm nicht als Rücktaste an.
   tab.voice = createVoice(pane.querySelector('.mic'), {
     getModel: () => store.settings.voice_model,
-    onText: (text) => tab.id && term.paste(text),
+    onEdit: (del, text) => {
+      tab.sending = tab.sending.then(() => tab.id && api.sshWrite(tab.id, ''.repeat(del) + text)).catch(() => {});
+    },
     onSetup: voiceSetup,
   });
   pane.querySelector('.mic').addEventListener('click', () => {

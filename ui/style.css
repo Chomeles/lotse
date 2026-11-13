@@ -155,7 +155,7 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .ib.del:hover { color: var(--red); }
 .ib.mic { position: relative; }
 /* Der Ring wächst mit der Lautstärke (--level, 0 bis 1): so sieht man, dass das Mikrofon Ton bekommt. */
-.ib.mic.rec { color: var(--red); background: rgba(248, 113, 113, .15); box-shadow: 0 0 0 calc(1px + var(--level, 0) * 5px) rgba(248, 113, 113, calc(.25 + var(--level, 0) * .35)); transition: box-shadow 80ms linear; }
+.ib.mic.rec { color: var(--red); background: rgba(248, 113, 113, calc(.12 + var(--level, 0) * .3)); box-shadow: 0 0 0 calc(1px + var(--level, 0) * 6px) rgba(248, 113, 113, calc(.2 + var(--level, 0) * .4)); transition: box-shadow 80ms linear, background 80ms linear; }
 /* Sekunden seit Beginn der Erkennung, links neben dem Knopf. */
 .ib.mic[data-s]::before { content: attr(data-s); position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); font: 12px var(--mono, monospace); color: var(--amber); white-space: nowrap; }
 .ib.mic.busy { color: var(--amber); cursor: progress; }
