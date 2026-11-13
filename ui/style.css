@@ -15,8 +15,18 @@
   --amber: #fbbf24;
   --ui: "Segoe UI", "Inter", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  /* Bewegung: eine Dauer und eine Kurve für alles. Animiert werden nur opacity und transform. */
+  --dur: 160ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
   color-scheme: dark;
 }
+/* Wer weniger Bewegung will, bekommt keine. Der Verbinden-Kreisel bleibt, er zeigt einen Zustand. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0s; }
+}
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(5px) scale(.98); } }
+@keyframes pop { from { opacity: 0; transform: scale(.98); } }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--hover) transparent; }
 html, body { height: 100%; margin: 0; }
@@ -46,7 +56,7 @@ button > * { pointer-events: none; }
 .search input::placeholder, .in::placeholder { color: var(--mute); }
 .label { padding: 12px 16px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
 .hosts { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
-.host { display: flex; align-items: center; gap: 4px; padding-right: 6px; border-radius: 8px; transition: background .12s; }
+.host { display: flex; align-items: center; gap: 4px; padding-right: 6px; border-radius: 8px; transition: background var(--dur) var(--ease); }
 .host:hover { background: var(--surf); }
 .host.on { background: var(--raise); }
 .hmain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; background: none; text-align: left; border-radius: 8px; }
@@ -62,9 +72,9 @@ button > * { pointer-events: none; }
 .host .edit { opacity: 0; }
 .host:hover .edit, .host .edit:focus-visible { opacity: 1; }
 .sidefoot { padding: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
-.update { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px; font-size: 12px; color: var(--mute); }
+.update { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px; font-size: 12px; color: var(--mute); animation: rise var(--dur) var(--ease); }
 .update span { flex: 1; min-width: 0; }
-.navbtn { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border: 0; background: none; border-radius: 8px; text-align: left; color: var(--mute); transition: background .12s, color .12s; }
+.navbtn { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border: 0; background: none; border-radius: 8px; text-align: left; color: var(--mute); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
 .navbtn:hover, .navbtn.on { background: var(--raise); color: var(--text); }
 .none { padding: 24px 16px; color: var(--mute); font-size: 13px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 
@@ -75,13 +85,18 @@ button > * { pointer-events: none; }
 .dot.a { background: none; border: 2px solid var(--amber); border-top-color: transparent; animation: spin .9s linear infinite; }
 .dot.big { width: 16px; height: 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Einmal ein weicher Ring, wenn der Reiter auf „verbunden“ wechselt. Nur dort: die Hostliste wird oft neu
+   gezeichnet und die Kopfzeile bei jedem Reiterwechsel neu gezeigt, der Ring liefe dort jedes Mal wieder. */
+.tab .dot.g { position: relative; }
+.tab .dot.g::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--green); opacity: 0; animation: ring calc(var(--dur) * 3) var(--ease); }
+@keyframes ring { from { opacity: .5; } to { opacity: 0; transform: scale(2.5); } }
 
 /* Reiter und Fensterknöpfe */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .tabs { display: flex; align-items: flex-end; height: 40px; flex: none; padding-left: 8px; background: var(--side); }
 .main.empty .tabs { background: var(--term); }
 #tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; }
-.tab { display: flex; align-items: center; gap: 2px; height: 32px; padding-right: 4px; border-radius: 8px 8px 0 0; color: var(--mute); max-width: 200px; min-width: 0; transition: background .12s; }
+.tab { display: flex; align-items: center; gap: 2px; height: 32px; padding-right: 4px; border-radius: 8px 8px 0 0; color: var(--mute); max-width: 200px; min-width: 0; transition: background var(--dur) var(--ease); }
 .tab:hover { background: var(--surf); }
 .tab.on { background: var(--term); color: var(--text); }
 .tab.off .n { color: var(--red); }
@@ -102,6 +117,9 @@ button > * { pointer-events: none; }
 .seg button.on { background: var(--raise); color: var(--text); }
 .stat { margin-left: auto; min-width: 0; display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--mute); }
 .pane-body { flex: 1; min-height: 0; position: relative; }
+/* Blendet über, sobald die Ansicht sichtbar wird: beim Reiterwechsel und beim Umschalten Terminal ↔ Dateien.
+   Nur opacity, damit im Terminal nichts springt. */
+.term-view, .files { animation: fade var(--dur) var(--ease); }
 
 /* Leerzustand */
 #empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px; overflow: auto; }
@@ -121,7 +139,7 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .find .count { white-space: nowrap; }
 
 /* Knöpfe und Felder */
-.btn { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--raise); color: var(--text); white-space: nowrap; transition: background .12s, border-color .12s; }
+.btn { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--raise); color: var(--text); white-space: nowrap; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .btn:hover { background: var(--hover); border-color: #3a4656; }
 .btn.pri { background: var(--green); border-color: var(--green); color: #052e16; font-weight: 600; }
 .btn.pri:hover { background: #6ee7a0; border-color: #6ee7a0; }
@@ -131,7 +149,8 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .btn.dfill:hover { background: #fca5a5; border-color: #fca5a5; }
 .btn.sm { height: 26px; padding: 0 10px; }
 .btn:disabled { opacity: .45; cursor: default; }
-.ib { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; border-radius: 6px; color: var(--mute); transition: background .12s, color .12s; }
+.btn:active:not(:disabled), .ib:active { transform: scale(.98); }
+.ib { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; border-radius: 6px; color: var(--mute); transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .ib:hover { background: var(--hover); color: var(--text); }
 .ib.del:hover { color: var(--red); }
 .ib.mic.rec { color: var(--red); background: rgba(248, 113, 113, .15); }
@@ -149,12 +168,12 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .hint.err { color: var(--red); display: flex; align-items: center; gap: 6px; }
 .hint.err .i { width: 14px; height: 14px; }
 .sw { width: 38px; height: 22px; flex: none; padding: 2px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); display: flex; }
-.sw span { width: 16px; height: 16px; border-radius: 50%; background: var(--mute); transition: transform .15s; }
+.sw span { width: 16px; height: 16px; border-radius: 50%; background: var(--mute); transition: transform var(--dur) var(--ease); }
 .sw.on { background: var(--green); border-color: var(--green); }
 .sw.on span { background: #052e16; transform: translateX(16px); }
 
 /* Ablegefläche beim Hereinziehen von Dateien */
-.drop { position: absolute; inset: 12px; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; border: 2px dashed var(--green); border-radius: 14px; background: rgba(13, 17, 23, .88); text-align: center; pointer-events: none; }
+.drop { position: absolute; inset: 12px; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; border: 2px dashed var(--green); border-radius: 14px; background: rgba(13, 17, 23, .88); text-align: center; pointer-events: none; animation: pop var(--dur) var(--ease); }
 .drop .i { width: 36px; height: 36px; stroke-width: 1.1; color: var(--green); }
 .drop strong { font-size: 16px; font-weight: 600; }
 .drop span { color: var(--mute); max-width: 340px; }
@@ -177,7 +196,7 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .row .r { text-align: right; }
 .row .nm { display: flex; align-items: center; gap: 10px; min-width: 0; border: 0; background: none; padding: 0; text-align: left; height: 100%; }
 .row .sm { font-size: 13px; color: var(--mute); }
-.row .acts { gap: 2px; flex-wrap: nowrap; opacity: 0; transition: opacity .12s; }
+.row .acts { gap: 2px; flex-wrap: nowrap; opacity: 0; transition: opacity var(--dur) var(--ease); }
 .list .row:hover { background: var(--surf); }
 .row:hover .acts, .row:focus-within .acts { opacity: 1; }
 .fold { color: var(--green); }
@@ -189,10 +208,10 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .sbar .i { color: var(--green); }
 .sbar .bar { flex: 1; max-width: 320px; }
 .bar { height: 4px; border-radius: 2px; background: var(--raise); overflow: hidden; }
-.bar span { display: block; height: 100%; border-radius: 2px; background: var(--green); transition: width .12s; }
+.bar span { display: block; height: 100%; border-radius: 2px; background: var(--green); transition: width var(--dur) var(--ease); }
 
 /* Rechtsklick-Menü */
-.menu { position: fixed; z-index: 20; min-width: 190px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: var(--surf); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .55); }
+.menu { position: fixed; z-index: 20; min-width: 190px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: var(--surf); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .55); transform-origin: top left; animation: pop var(--dur) var(--ease); }
 .menu button { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border: 0; background: none; border-radius: 6px; text-align: left; color: var(--text); }
 .menu button .i { color: var(--mute); }
 .menu button:hover, .menu button:focus-visible { background: var(--hover); outline: 0; }
@@ -201,6 +220,8 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 /* Dialoge */
 dialog { width: min(440px, calc(100vw - 48px)); padding: 20px; background: var(--surf); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .65); }
 dialog::backdrop { background: rgba(6, 8, 11, .72); }
+dialog[open] { animation: rise var(--dur) var(--ease); }
+dialog[open]::backdrop { animation: fade var(--dur) var(--ease); }
 dialog > form { display: flex; flex-direction: column; gap: 16px; }
 dialog.warn { border-color: var(--red); box-shadow: 0 0 0 4px rgba(248, 113, 113, .15), 0 24px 60px rgba(0, 0, 0, .65); }
 dialog h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; overflow-wrap: anywhere; }

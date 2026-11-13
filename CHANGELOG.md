@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.6.1 – 2026-11-13
+- Wenige, kurze Übergänge (160 ms): Dialoge und Rechtsklick-Menü blenden weich ein, Reiter-Inhalt und der Wechsel Terminal ↔ Dateien blenden über, der Statuspunkt im Reiter pulst einmal beim Verbinden, Fortschrittsbalken gleiten, Knöpfe geben beim Drücken minimal nach. Wer in Windows Animationen abgeschaltet hat, bekommt keine
+
 ## 0.6.0 – 2026-11-13
 - Spracheingabe: Mikrofon-Knopf rechts in der Kopfzeile des Reiters (oder Strg + Umschalt + M) nimmt auf, der erkannte Text landet an der Schreibmarke, ohne Enter. Die Erkennung läuft mit Whisper auf dem eigenen Rechner, es wird nichts hochgeladen
 - Verwaltung, neuer Bereich „Spracheingabe“: vier Modelle von 148 MB bis 1,6 GB auf einem Regler, mit Genauigkeit, Tempo und Empfehlung für den eigenen Rechner. Das Modell wird einmalig geladen und bleibt, bis man es löscht; Wechseln lädt nie neu, ein abgebrochener Download wird fortgesetzt und läuft weiter, wenn die Verwaltung zu ist
