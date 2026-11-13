@@ -4,6 +4,12 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.6.3 – 2026-11-13
+- Behoben: Die Spracherkennung war um ein Vielfaches zu langsam (ein Satz mit dem Modell „Groß“ über zwei Minuten), weil die Whisper-Bibliothek ohne Optimierung übersetzt wurde. Jetzt braucht „Klein“ etwa 1 Sekunde, „Mittel“ etwa 4, „Groß“ etwa 20 (gemessen auf einem Ryzen 7 mit 8 Kernen)
+- Verwaltung, Spracheingabe: „Mikrofon testen“ zeigt, welches Mikrofon Hostess benutzt, den Pegel in Echtzeit und ob du gut zu verstehen bist
+- Beim Aufnehmen wächst ein Ring um den Mikrofon-Knopf mit der Lautstärke; beim Erkennen zählt der Knopf die Sekunden. Kam kein Ton an, sagt Hostess das und nennt das Mikrofon, statt nichts zu tun
+- Empfohlen wird jetzt „Mittel“ (ab 8 Kernen) oder „Klein“; die Beschreibungen der großen Modelle sagen ehrlich, dass sie langsam sind
+
 ## 0.6.2 – 2026-11-13
 - Die Passphrase gilt wieder je Schlüsseldatei, wie bis 0.6.0: einmal entsperrt oder gespeichert, verbinden alle Hosts mit genau dieser Datei ohne Nachfrage. Andere Schlüssel bleiben gesperrt. Die Umstellung auf „je Host“ aus 0.6.1 ist zurückgenommen
 

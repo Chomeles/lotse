@@ -5,7 +5,7 @@ import { alertBox } from '../dialog.js';
 const RATE = 16000;
 const MAX_MS = 120000;
 
-const micError = (e) => ({
+export const micError = (e) => ({
   NotFoundError: 'Es wurde kein Mikrofon gefunden. Schließe eins an und versuch es noch einmal.',
   NotAllowedError: 'Der Zugriff auf das Mikrofon wurde verweigert. Erlaube ihn in den Windows-Einstellungen unter Datenschutz und Sicherheit, Mikrofon.',
   NotReadableError: 'Das Mikrofon ließ sich nicht öffnen. Vielleicht benutzt es gerade ein anderes Programm.',
@@ -19,6 +19,7 @@ export function createVoice(button, { getModel, onText, onSetup }) {
   let rec = null;
   // Zählt hoch, wenn etwas Laufendes verworfen wird (Reiter zu, Verbindung weg).
   let run = 0;
+  let clock = 0;
 
   function show(next) {
     state = next;
@@ -28,6 +29,13 @@ export function createVoice(button, { getModel, onText, onSetup }) {
     const label = { rec: 'Aufnahme beenden', start: 'Spracheingabe startet …', busy: 'Sprache wird erkannt …' }[state] ?? 'Spracheingabe';
     button.setAttribute('aria-label', label);
     button.title = `${label} (Strg + Umschalt + M)`;
+    // Beim Erkennen zählt der Knopf die Sekunden: große Modelle brauchen lange, und ohne Anzeige sieht das tot aus.
+    clearInterval(clock);
+    delete button.dataset.s;
+    if (state === 'busy') {
+      const since = Date.now();
+      clock = setInterval(() => { button.dataset.s = `${Math.round((Date.now() - since) / 1000)} s`; }, 1000);
+    }
   }
 
   // Fehlt das Modell oder ist es beschädigt, hilft nur die Verwaltung. Alles andere ist eine Fehlermeldung.
@@ -44,6 +52,7 @@ export function createVoice(button, { getModel, onText, onSetup }) {
     clearTimeout(done.timer);
     for (const track of done.stream.getTracks()) track.stop();
     done.context.close();
+    button.style.removeProperty('--level');
     return done;
   }
 
@@ -71,12 +80,20 @@ export function createVoice(button, { getModel, onText, onSetup }) {
         return;
       }
       const context = new AudioContext({ sampleRate: RATE });
-      const node = context.createScriptProcessor(4096, 1, 1);
-      const taken = { id, stream, context, chunks: [], peak: 0, timer: setTimeout(finish, MAX_MS) };
+      // Nach der Rückfrage zum Mikrofon kann der Kontext angehalten starten: dann käme kein Ton an.
+      await context.resume();
+      const node = context.createScriptProcessor(1024, 1, 1);
+      const device = stream.getAudioTracks()[0]?.label ?? '';
+      const taken = { id, stream, context, device, chunks: [], peak: 0, level: 0, timer: setTimeout(finish, MAX_MS) };
       node.onaudioprocess = (e) => {
         const chunk = new Float32Array(e.inputBuffer.getChannelData(0));
-        for (const sample of chunk) taken.peak = Math.max(taken.peak, Math.abs(sample));
+        let loud = 0;
+        for (const sample of chunk) loud = Math.max(loud, Math.abs(sample));
+        taken.peak = Math.max(taken.peak, loud);
         taken.chunks.push(chunk);
+        // Der Ring um den Knopf folgt der Lautstärke: schnell hoch, langsam runter. So sieht man, dass Ton ankommt.
+        taken.level = Math.max(Math.min(1, loud * 4), taken.level * 0.8);
+        if (rec === taken) button.style.setProperty('--level', taken.level.toFixed(2));
       };
       context.createMediaStreamSource(stream).connect(node);
       // Der Knoten läuft nur, wenn er am Ausgang hängt. Er gibt selbst nichts aus.
@@ -92,15 +109,19 @@ export function createVoice(button, { getModel, onText, onSetup }) {
 
   async function finish() {
     const mine = run;
-    const { id, chunks, peak } = end();
+    const { id, chunks, peak, device } = end();
     const samples = new Float32Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
     let at = 0;
     for (const chunk of chunks) {
       samples.set(chunk, at);
       at += chunk.length;
     }
-    // Zu kurz (unter 0,3 s) oder nur Stille: nichts einfügen und nichts melden.
-    if (samples.length < RATE * 0.3 || peak < 0.01) return show('');
+    // Zu kurz (unter 0,3 s): ein versehentlicher Doppelklick, nichts melden.
+    if (samples.length < RATE * 0.3) return show('');
+    if (peak < 0.01) {
+      show('');
+      return alertBox('Nichts gehört', `Vom Mikrofon kam kein Ton${device ? ` (${device})` : ''}. Prüfe in den Windows-Einstellungen unter System, Sound, ob das richtige Mikrofon als Standard gewählt und nicht stummgeschaltet ist.`);
+    }
     show('busy');
     try {
       const text = await api.voiceTranscribe(id, samples);

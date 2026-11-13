@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { alertBox, ask, errorHint, esc, openDialog } from '../dialog.js';
 import { icon } from '../icons.js';
 import { checkUpdate } from '../update.js';
+import { micError } from './voice.js';
 
 const size = (bytes) =>
   (bytes < 1e9 ? `${Math.round(bytes / 1e6)} MB` : `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB`);
@@ -58,6 +59,15 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
             <div class="vticks" aria-hidden="true"></div>
           </div>
           <div class="card"></div>
+          <h4>Mikrofon testen</h4>
+          <div class="card mictest">
+            <div class="info">
+              <div class="title"><strong class="micname">Mikrofon</strong></div>
+              <div class="meter" role="meter" aria-label="Pegel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+              <span class="hint micnote" role="status">Zeigt, welches Mikrofon Hostess benutzt und wie laut es dich hört.</span>
+            </div>
+            <div class="vacts"><button type="button" class="btn" data-do="mic">Test starten</button></div>
+          </div>
         </section>
         <section data-area="keys" hidden>
           <div class="area-head"><h3>Schlüssel</h3>
@@ -172,7 +182,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
   const voice = section('voice');
   const range = voice.querySelector('input');
   const card = voice.querySelector('.card');
-  const recommended = navigator.hardwareConcurrency >= 8 ? 'turbo-q5' : 'small';
+  const recommended = navigator.hardwareConcurrency >= 8 ? 'small' : 'base';
   let models = null;
   let polling = false;
 
@@ -264,6 +274,65 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
     showModel();
   });
 
+  // Mikrofon-Test: derselbe Weg wie bei der Aufnahme (Standard-Mikrofon von Windows), nur mit Pegel statt
+  // Erkennung. Das Urteil richtet sich nach dem lautesten Moment seit dem Start.
+  const mic = voice.querySelector('.mictest');
+  let testing = null;
+  function stopTest() {
+    if (!testing) return;
+    cancelAnimationFrame(testing.frame);
+    for (const track of testing.stream.getTracks()) track.stop();
+    testing.context.close();
+    testing = null;
+    mic.querySelector('.meter span').style.width = '0';
+    mic.querySelector('button').textContent = 'Test starten';
+  }
+  async function startTest() {
+    const note = mic.querySelector('.micnote');
+    const button = mic.querySelector('button');
+    button.disabled = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const context = new AudioContext();
+      await context.resume();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024;
+      context.createMediaStreamSource(stream).connect(analyser);
+      const data = new Float32Array(analyser.fftSize);
+      const bar = mic.querySelector('.meter span');
+      mic.querySelector('.micname').textContent = stream.getAudioTracks()[0]?.label.replace(/^Standard - /, '') || 'Mikrofon';
+      testing = { stream, context, frame: 0 };
+      const mine = testing;
+      let level = 0;
+      let best = 0;
+      const draw = () => {
+        if (testing !== mine) return;
+        if (!dialog.isConnected || voice.hidden) return stopTest();
+        analyser.getFloatTimeDomainData(data);
+        let loud = 0;
+        for (const sample of data) loud = Math.max(loud, Math.abs(sample));
+        best = Math.max(best, loud);
+        level = Math.max(loud, level * 0.9);
+        const percent = Math.round(Math.min(1, level * 2) * 100);
+        bar.style.width = `${percent}%`;
+        bar.parentElement.setAttribute('aria-valuenow', percent);
+        const [cls, text] = best < 0.01 ? ['', 'Sprich einen Satz. Bisher kommt kein Ton an.']
+          : best < 0.08 ? ['amber', 'Ton kommt an, aber leise. Geh näher ans Mikrofon oder dreh es in Windows lauter.']
+          : best > 0.98 ? ['amber', 'Zu laut, der Ton übersteuert. Dreh das Mikrofon in Windows leiser.']
+          : ['green', 'Gut. So versteht dich die Spracheingabe.'];
+        bar.className = cls;
+        if (note.textContent !== text) note.textContent = text;
+        mine.frame = requestAnimationFrame(draw);
+      };
+      button.textContent = 'Test beenden';
+      draw();
+    } catch (e) {
+      note.textContent = micError(e);
+    }
+    button.disabled = false;
+  }
+  mic.querySelector('button').addEventListener('click', () => (testing ? stopTest() : startTest()));
+
   function select(area) {
     for (const b of dialog.querySelectorAll('.areas button')) b.classList.toggle('on', b.dataset.area === area);
     for (const s of dialog.querySelectorAll('section')) s.hidden = s.dataset.area !== area;
@@ -328,6 +397,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
 
   if (area !== 'settings') select(area);
   await done;
+  stopTest();
   apply();
 }
 

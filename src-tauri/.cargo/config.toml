@@ -1,0 +1,6 @@
+# Whisper (C/C++) wird über CMake gebaut. Ohne diese Zeilen fehlen unter MSVC die Optimierungsschalter
+# (/O2), und die Spracherkennung ist um ein Vielfaches langsamer.
+# Nach einer Änderung hier: cargo clean --release -p whisper-rs-sys
+[env]
+CMAKE_C_FLAGS_RELEASE = "/MD /O2 /Ob2 /DNDEBUG"
+CMAKE_CXX_FLAGS_RELEASE = "/MD /O2 /Ob2 /DNDEBUG /utf-8 /EHsc"

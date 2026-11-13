@@ -37,21 +37,21 @@ pub const MODELS: [Model; 4] = [
     Model {
         id: "small",
         name: "Mittel",
-        note: "Gut für Deutsch und Englisch",
+        note: "Gut für Deutsch und Englisch, wenige Sekunden pro Satz",
         file: "ggml-small.bin",
         bytes: 487_601_967,
     },
     Model {
         id: "turbo-q5",
         name: "Groß",
-        note: "Sehr genau, braucht einen kräftigen Rechner",
+        note: "Sehr genau, aber langsam: auch ein schneller Rechner braucht viele Sekunden pro Satz",
         file: "ggml-large-v3-turbo-q5_0.bin",
         bytes: 574_041_195,
     },
     Model {
         id: "turbo",
         name: "Maximal",
-        note: "Beste Erkennung, am langsamsten",
+        note: "Beste Erkennung, sehr langsam: nur für Geduldige",
         file: "ggml-large-v3-turbo.bin",
         bytes: 1_624_555_275,
     },
@@ -187,6 +187,12 @@ pub fn load(path: &Path) -> Result<WhisperContext, String> {
         .map_err(|e| format!("Das Sprachmodell ließ sich nicht laden: {e}"))
 }
 
+/// Whisper rechnet auf echten Kernen am schnellsten: mit allen logischen Kernen (Hyperthreading) wird es
+/// langsamer, über 8 Threads bringt nichts mehr. `logical` ist die Zahl der logischen Kerne.
+fn threads(logical: usize) -> i32 {
+    (if logical > 4 { logical / 2 } else { logical }).min(8) as i32
+}
+
 /// Wandelt Sprache in Text. `samples`: 16 kHz, mono. Die Sprache erkennt Whisper selbst.
 pub fn transcribe(context: &WhisperContext, samples: &[f32]) -> Result<String, String> {
     let failed = |e| format!("Die Spracherkennung ist fehlgeschlagen: {e}");
@@ -195,7 +201,7 @@ pub fn transcribe(context: &WhisperContext, samples: &[f32]) -> Result<String, S
     samples.resize(samples.len().max(17_600), 0.0);
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("auto"));
-    params.set_n_threads(std::thread::available_parallelism().map_or(4, |n| n.get() as i32));
+    params.set_n_threads(threads(std::thread::available_parallelism().map_or(4, |n| n.get())));
     // Keine Geräusch-Vermerke wie „[Musik]“: der Text landet im Terminal.
     params.set_suppress_nst(true);
     params.set_print_progress(false);
@@ -224,6 +230,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("hostess-voice-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn nutzt_echte_kerne_und_hoechstens_acht() {
+        assert_eq!([1, 4, 8, 16, 32].map(threads), [1, 4, 4, 8, 8]);
     }
 
     #[test]
@@ -285,8 +296,10 @@ mod tests {
         let data = wav.windows(4).position(|w| w == b"data").expect("kein data-Abschnitt") + 8;
         let samples: Vec<f32> =
             wav[data..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
-        let text = transcribe(&load(Path::new(&model)).unwrap(), &samples).unwrap();
-        println!("{text}");
+        let context = load(Path::new(&model)).unwrap();
+        let start = std::time::Instant::now();
+        let text = transcribe(&context, &samples).unwrap();
+        println!("{text} ({:.1} s)", start.elapsed().as_secs_f32());
         assert!(!text.is_empty());
     }
 }
