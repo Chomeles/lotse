@@ -34,7 +34,7 @@ export async function openSettings(settings, hosts, onChange) {
         </section>
         <section data-area="known" hidden>
           <h3>Bekannte Hosts</h3>
-          <p>Server, deren Schlüssel du schon bestätigt hast. Nach dem Entfernen fragt Lotse beim nächsten Verbinden neu.</p>
+          <p>Server, deren Schlüssel du schon bestätigt hast. Nach dem Entfernen fragt Hostess beim nächsten Verbinden neu.</p>
           <div class="known"></div>
         </section>
       </div>
@@ -191,7 +191,7 @@ async function newKey() {
     <h2>${icon('key')}Neuer Schlüssel</h2>
     <p>Erzeugt einen ED25519-Schlüssel im Ordner .ssh, zusammen mit der .pub-Datei. Vorhandene Dateien werden nie überschrieben.</p>
     <label class="field"><span>Dateiname</span>
-      <input class="in mono" name="name" required pattern="[A-Za-z0-9_\\-][A-Za-z0-9_.\\-]*" value="id_ed25519_lotse" spellcheck="false" autofocus>
+      <input class="in mono" name="name" required pattern="[A-Za-z0-9_\\-][A-Za-z0-9_.\\-]*" value="id_ed25519_hostess" spellcheck="false" autofocus>
       <span class="hint">Buchstaben, Ziffern, Punkt, Binde- und Unterstrich</span></label>
     <label class="field"><span>Passphrase (freiwillig)</span>
       <input class="in" name="passphrase" type="password" autocomplete="new-password">
@@ -225,7 +225,7 @@ async function confirmDelete(key) {
     <div class="fp">${esc(key.path)}</div>
     <p>${key.hosts.length
       ? `Diese Hosts verwenden den Schlüssel und können sich danach nicht mehr damit anmelden: ${esc(key.hosts.join(', '))}`
-      : 'Kein Host in Lotse verwendet diesen Schlüssel.'}</p>
+      : 'Kein Host in Hostess verwendet diesen Schlüssel.'}</p>
     <div class="acts">
       <button value="" class="btn" autofocus>Abbrechen</button>
       <button value="delete" class="btn dfill">Endgültig löschen</button>

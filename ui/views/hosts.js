@@ -2,17 +2,36 @@ import { api } from '../api.js';
 import { ask, errorHint, esc, openDialog } from '../dialog.js';
 import { icon } from '../icons.js';
 
+// Antwortzeit als Text und Farbklasse. `undefined` = nicht gemessen, `Infinity` = keine Antwort.
+const pingLabel = (ms) => {
+  if (ms === undefined) return { text: '', cls: '' };
+  if (ms === Infinity) return { text: '> 5 s', cls: 'r' };
+  return { text: `${ms} ms`, cls: ms < 200 ? 'g' : ms < 1000 ? 'a' : 'r' };
+};
+
+// Setzt nur die Antwortzeiten der gezeichneten Zeilen neu, ohne die Liste neu zu bauen.
+export function updatePings(list, ping) {
+  for (const ms of list.querySelectorAll('.ms')) {
+    const { text, cls } = pingLabel(ping(ms.closest('.host').host));
+    ms.textContent = text;
+    ms.className = `ms ${cls}`;
+  }
+}
+
 // Zeichnet die Hostliste, gefiltert nach dem Suchtext.
-// `state(host)` liefert die Klasse des Statuspunkts, `active` ist der Host des sichtbaren Reiters.
-export function renderHosts(list, hosts, filter, { onConnect, onEdit, state, active }) {
+// `state(host)` liefert die Klasse des Statuspunkts, `ping(host)` die Antwortzeit in Millisekunden,
+// `active` ist der Host des sichtbaren Reiters.
+export function renderHosts(list, hosts, filter, { onConnect, onEdit, state, ping, active }) {
   const needle = filter.trim().toLowerCase();
   const shown = hosts.filter((h) => `${h.name} ${h.user} ${h.address}`.toLowerCase().includes(needle));
   list.replaceChildren(...shown.map((host) => {
     const li = document.createElement('div');
     li.className = host === active ? 'host on' : 'host';
+    li.host = host;
+    const ms = pingLabel(ping(host));
     li.innerHTML = `
       <button type="button" class="hmain" title="Verbinden">
-        <span class="dot ${state(host)}"></span>
+        <span class="hs"><span class="dot ${state(host)}"></span><span class="ms ${ms.cls}">${ms.text}</span></span>
         <span class="ht"><span class="n">${esc(host.name)}</span>
           <span class="a">${esc(host.user || '?')}@${esc(host.address)}${host.port === 22 ? '' : `:${host.port}`}</span></span>
       </button>
@@ -46,7 +65,7 @@ export async function editHost(host, hosts, hint = '') {
     <div class="field"><label class="flabel" for="key-path">Schlüsseldatei (freiwillig)</label>
       <div class="rowf"><input class="in mono" id="key-path" name="key_path" value="${esc(h.key_path)}" list="key-list" aria-describedby="key-hint" spellcheck="false"><button type="button" class="btn browse">Durchsuchen</button></div>
       <datalist id="key-list"></datalist>
-      <span class="hint" id="key-hint">Ohne Schlüssel fragt Lotse beim Verbinden nach dem Passwort.</span>
+      <span class="hint" id="key-hint">Ohne Schlüssel fragt Hostess beim Verbinden nach dem Passwort.</span>
     </div>
     <div class="acts">
       ${host ? '<button value="remove" formnovalidate class="btn danger left">Löschen</button>' : ''}

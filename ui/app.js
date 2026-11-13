@@ -2,14 +2,14 @@ import { api } from './api.js';
 import { alertBox, errorHint, esc, openDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { createFiles } from './views/files.js';
-import { editHost, renderHosts } from './views/hosts.js';
+import { editHost, renderHosts, updatePings } from './views/hosts.js';
 import { openSettings } from './views/settings.js';
 import { applySettings, createTerminal } from './views/terminal.js';
 import { createUploads } from './views/uploads.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/lotse-paste' } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/hostess-paste' } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -28,11 +28,25 @@ const hostState = (host) => {
   return ['g', 'a', 'r'].find((s) => states.includes(s)) ?? '';
 };
 
+// Antwortzeit eines Hosts: die seines ersten verbundenen Reiters.
+const hostPing = (host) => [...tabs].find((t) => t.host === host && t.state === 'g')?.ping;
+
+// Misst die Antwortzeit eines Reiters. `Infinity` heißt: keine Antwort. Die Liste wird nicht neu gebaut,
+// damit Hover, Fokus und laufende Klicks bleiben.
+async function measure(tab) {
+  const { id } = tab;
+  const ping = await api.sshPing(id).catch(() => Infinity);
+  if (tab.id !== id) return;
+  tab.ping = ping;
+  updatePings($('host-list'), hostPing);
+}
+
 function refreshHosts() {
   renderHosts($('host-list'), store.hosts, $('host-search').value, {
     onConnect: connect,
     onEdit: edit,
     state: hostState,
+    ping: hostPing,
     active: [...tabs].find((t) => !t.pane.hidden)?.host,
   });
 }
@@ -113,6 +127,7 @@ function setStatus(tab, text, state) {
 function markClosed(tab, text = 'Verbindung getrennt') {
   if (!tabs.has(tab)) return;
   tab.id = null;
+  tab.ping = undefined;
   tab.connecting = false;
   setStatus(tab, text, 'r');
   tab.terminal.term.write(`\r\n\x1b[90m[${text}. Enter verbindet neu.]\x1b[0m\r\n`);
@@ -211,7 +226,7 @@ const askSecret = async ({ title, intro, subject, label, wrong, ok }) => {
       ${wrong ? errorHint(wrong) : ''}
 </label>
     <label class="check"><input type="checkbox" name="remember"><span>${label} speichern</span></label>
-    <span class="hint">Ohne Haken nur im Arbeitsspeicher, bis du Lotse beendest. Mit Haken verschlüsselt in der Windows-Anmeldeinformationsverwaltung, Lotse fragt dann nicht mehr.</span>
+    <span class="hint">Ohne Haken nur im Arbeitsspeicher, bis du Hostess beendest. Mit Haken verschlüsselt in der Windows-Anmeldeinformationsverwaltung, Hostess fragt dann nicht mehr.</span>
     <div class="acts">
       <button value="" formnovalidate class="btn">Abbrechen</button>
       <button value="ok" class="btn pri">${ok}</button>
@@ -251,7 +266,7 @@ const confirmHost = async (host, fingerprint) =>
 const warnChanged = async (host, error) =>
   (await openDialog(`
     <h2>${icon('warn')}Warnung: Schlüssel des Servers hat sich geändert</h2>
-    <p class="lead">Der Server <span class="mono">${esc(host.address)}:${host.port}</span> zeigt einen anderen Schlüssel als beim letzten Mal. Lotse hat die Verbindung nicht aufgebaut.</p>
+    <p class="lead">Der Server <span class="mono">${esc(host.address)}:${host.port}</span> zeigt einen anderen Schlüssel als beim letzten Mal. Hostess hat die Verbindung nicht aufgebaut.</p>
     <p>Das passiert, wenn der Server neu aufgesetzt wurde. Es kann aber auch heißen, dass sich jemand zwischen dich und den Server geschaltet hat. Entferne den Eintrag nur, wenn du den Grund kennst.</p>
     <div class="field"><span>Bekannter Fingerabdruck</span><div class="fp">${error.old.map(esc).join('\n')}</div></div>
     <div class="field"><span class="red">Neuer Fingerabdruck</span><div class="fp new">${esc(error.fingerprint)}</div></div>
@@ -281,6 +296,7 @@ async function attach(tab) {
       tab.connecting = false;
       if (!tabs.has(tab)) api.sshDisconnect(tab.id);
       setStatus(tab, `${host.user}@${host.address}`, 'g');
+      measure(tab);
       term.focus();
       return;
     } catch (e) {
@@ -346,7 +362,7 @@ window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
 
 // ---------- Start ----------
 
-// Das Rechtsklick-Menü des Browsers (Zurück, Drucken, Untersuchen) hat in Lotse nichts verloren.
+// Das Rechtsklick-Menü des Browsers (Zurück, Drucken, Untersuchen) hat in Hostess nichts verloren.
 // In Textfeldern bleibt es, dort bietet es Kopieren und Einfügen.
 window.addEventListener('contextmenu', (e) => {
   if (!e.target.closest('input, textarea')) e.preventDefault();
@@ -384,3 +400,7 @@ try {
   await alertBox('Gespeicherte Hosts nicht lesbar', String(e));
 }
 refreshHosts();
+// Antwortzeit aller verbundenen Reiter alle 5 Sekunden neu messen.
+setInterval(() => {
+  for (const tab of tabs) if (tab.id) measure(tab);
+}, 5000);

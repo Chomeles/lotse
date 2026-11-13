@@ -31,6 +31,8 @@ export const api = {
   sshWrite: (id, data) => invoke('ssh_write', { id, data }),
   sshResize: (id, cols, rows) => invoke('ssh_resize', { id, cols, rows }),
   sshDisconnect: (id) => invoke('ssh_disconnect', { id }),
+  // Liefert die Antwortzeit in Millisekunden. Fehler, wenn der Server 5 Sekunden lang nicht antwortet.
+  sshPing: (id) => invoke('ssh_ping', { id }),
 
   // `path = null` ist der Startordner. Liefert { path, entries }.
   sftpList: (id, path) => invoke('sftp_list', { id, path }),

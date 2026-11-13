@@ -6,7 +6,7 @@ mod common;
 use std::time::Duration;
 
 use common::{new_key, start_key_only_server, start_server, temp, write_key, PASSWORD};
-use lotse::{
+use hostess::{
     known_hosts,
     ssh::{self, ConnectError},
     store::Host,
@@ -157,4 +157,16 @@ async fn anmelden_mit_passwort() {
         };
         assert!(message.contains("keine Anmeldung mit Passwort"), "{message}");
     }
+}
+
+#[tokio::test]
+async fn ping_wird_beantwortet() {
+    let key = new_key();
+    let (port, host_key) = start_server(key.public_key().clone(), 0, temp("")).await;
+    let known = temp("known_hosts_ping");
+    let _ = std::fs::remove_file(&known);
+    let host = Host { name: "ping".into(), address: "127.0.0.1".into(), port, user: "tester".into(), key_path: write_key("id_ping", &key) };
+    let handle = ssh::connect(&host, None, Some(known_hosts::fingerprint(&host_key)), known).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), handle.send_ping()).await.expect("keine Antwort auf den Ping").unwrap();
+    assert!(!handle.is_closed());
 }

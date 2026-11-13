@@ -9,7 +9,7 @@ use crate::store::Host;
 #[derive(Debug, Serialize)]
 pub struct Import {
     pub hosts: Vec<Host>,
-    /// Namen, die Lotse noch nicht verbinden kann (Umweg über einen Sprung-Host).
+    /// Namen, die Hostess noch nicht verbinden kann (Umweg über einen Sprung-Host).
     pub skipped: Vec<String>,
 }
 

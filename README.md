@@ -1,4 +1,4 @@
-# Lotse
+# Hostess
 
 Eigener SSH-Client für Windows: Terminal, Hostliste und Dateimanager in einem kleinen Programm.
 Gebaut mit Tauri 2 (Rust) und xterm.js, ohne Node und ohne Bundler.
@@ -21,9 +21,9 @@ Die Oberfläche in `ui/` wird beim Kompilieren eingebettet. Nach Änderungen dor
 - Neue Funktion = neue Rust-Datei, ein paar Zeilen in `commands.rs` und `lib.rs`, eine Ansicht.
 
 ## Daten
-`%APPDATA%\de.lotse.client\store.json` (Hosts, Einstellungen) und `known_hosts` daneben.
-Die Umgebungsvariable `LOTSE_DATA_DIR` lenkt den Ordner um, zum Beispiel für Tests.
-Schlüssel und SSH-Config liest Lotse aus `~/.ssh`; `LOTSE_SSH_DIR` lenkt auch das um.
+`%APPDATA%\de.hostess.client\store.json` (Hosts, Einstellungen) und `known_hosts` daneben.
+Die Umgebungsvariable `HOSTESS_DATA_DIR` lenkt den Ordner um, zum Beispiel für Tests.
+Schlüssel und SSH-Config liest Hostess aus `~/.ssh`; `HOSTESS_SSH_DIR` lenkt auch das um.
 
 ## Testen ohne echten Server
 `cargo run --example testserver` startet einen SSH-Server auf `127.0.0.1:2222`, der Eingaben zurückschickt,

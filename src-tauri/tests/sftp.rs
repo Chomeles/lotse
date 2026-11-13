@@ -4,7 +4,7 @@
 mod common;
 
 use common::{new_key, start_server, temp, write_key, SFTP_SERVER};
-use lotse::{sftp, ssh, store::Host};
+use hostess::{sftp, ssh, store::Host};
 
 #[tokio::test]
 async fn ordner_hochladen_herunterladen_umbenennen_loeschen() {
@@ -27,7 +27,7 @@ async fn ordner_hochladen_herunterladen_umbenennen_loeschen() {
     };
     let known = temp("known_hosts_sftp");
     let _ = std::fs::remove_file(&known);
-    let trust = Some(lotse::known_hosts::fingerprint(&host_key));
+    let trust = Some(hostess::known_hosts::fingerprint(&host_key));
     let handle = ssh::connect(&host, None, trust, known).await.unwrap();
     let sftp = sftp::open(&handle).await.unwrap();
 

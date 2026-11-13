@@ -1843,6 +1843,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "hostess"
+version = "0.5.0"
+dependencies = [
+ "keyring",
+ "png",
+ "rand",
+ "russh",
+ "russh-sftp",
+ "serde",
+ "serde_json",
+ "ssh2-config",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tokio",
+]
+
+[[package]]
 name = "html5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2447,25 +2466,6 @@ name = "log"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
-
-[[package]]
-name = "lotse"
-version = "0.4.0"
-dependencies = [
- "keyring",
- "png",
- "rand",
- "russh",
- "russh-sftp",
- "serde",
- "serde_json",
- "ssh2-config",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tokio",
-]
 
 [[package]]
 name = "markup5ever"

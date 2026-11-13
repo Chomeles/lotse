@@ -147,7 +147,7 @@ pub fn new_key() -> PrivateKey {
 }
 
 pub fn temp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("lotse-echo-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("hostess-echo-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join(name)
 }

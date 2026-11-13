@@ -24,7 +24,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/lotse-paste".into() }
+        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/hostess-paste".into() }
     }
 }
 
@@ -75,7 +75,7 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("lotse-store-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("hostess-store-{name}-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         dir.join("store.json")
     }

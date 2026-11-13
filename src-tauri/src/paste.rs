@@ -139,9 +139,9 @@ mod tests {
 
     #[test]
     fn pfad_text_mit_und_ohne_anfuehrungszeichen() {
-        assert_eq!(shell_word("/root/lotse-paste/bild-2026-11-12-231405.png"), "/root/lotse-paste/bild-2026-11-12-231405.png");
+        assert_eq!(shell_word("/root/hostess-paste/bild-2026-11-12-231405.png"), "/root/hostess-paste/bild-2026-11-12-231405.png");
         assert_eq!(shell_word("/home/a_b/x.tar.gz"), "/home/a_b/x.tar.gz");
-        assert_eq!(shell_word("/root/lotse-paste/mein bild.png"), "'/root/lotse-paste/mein bild.png'");
+        assert_eq!(shell_word("/root/hostess-paste/mein bild.png"), "'/root/hostess-paste/mein bild.png'");
         assert_eq!(shell_word("/tmp/it's $(rm).png"), r"'/tmp/it'\''s $(rm).png'");
         assert_eq!(shell_word("/tmp/größe.png"), "'/tmp/größe.png'");
     }

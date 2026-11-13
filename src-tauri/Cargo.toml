@@ -1,10 +1,10 @@
 [package]
-name = "lotse"
-version = "0.4.0"
+name = "hostess"
+version = "0.5.0"
 edition = "2021"
 
 [lib]
-name = "lotse"
+name = "hostess"
 path = "src/lib.rs"
 
 [build-dependencies]

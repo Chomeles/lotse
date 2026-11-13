@@ -7,6 +7,7 @@ use std::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex,
     },
+    time::{Duration, Instant},
 };
 
 use russh_sftp::client::SftpSession;
@@ -41,7 +42,7 @@ pub struct App {
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
     /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
-    /// im Arbeitsspeicher, bis Lotse beendet wird. Dauerhaft gespeicherte liegen in `saved`.
+    /// im Arbeitsspeicher, bis Hostess beendet wird. Dauerhaft gespeicherte liegen in `saved`.
     secrets: Mutex<HashMap<String, String>>,
     /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
     transfers: Mutex<HashMap<u32, Arc<AtomicBool>>>,
@@ -75,9 +76,9 @@ fn text(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Der Ordner mit SSH-Config und Schlüsseln. LOTSE_SSH_DIR lenkt ihn um (für Tests, damit `~/.ssh` unberührt bleibt).
+/// Der Ordner mit SSH-Config und Schlüsseln. HOSTESS_SSH_DIR lenkt ihn um (für Tests, damit `~/.ssh` unberührt bleibt).
 fn ssh_dir() -> Result<PathBuf, String> {
-    match std::env::var_os("LOTSE_SSH_DIR") {
+    match std::env::var_os("HOSTESS_SSH_DIR") {
         Some(dir) => Ok(dir.into()),
         None => Ok(std::env::home_dir().ok_or("Kein Benutzerordner gefunden.")?.join(".ssh")),
     }
@@ -92,10 +93,22 @@ fn secret_slot(host: &Host) -> String {
     }
 }
 
-/// Dauerhaft gespeichertes Geheimnis: ein Eintrag „Lotse“ in der Windows-Anmeldeinformationsverwaltung,
+/// Dauerhaft gespeichertes Geheimnis: ein Eintrag „Hostess“ in der Windows-Anmeldeinformationsverwaltung,
 /// verschlüsselt mit dem Windows-Konto. In `store.json` steht nie ein Geheimnis.
 fn saved(slot: &str) -> Option<keyring::Entry> {
-    keyring::Entry::new("Lotse", slot).ok()
+    keyring::Entry::new("Hostess", slot).ok()
+}
+
+/// Liest das gespeicherte Geheimnis. Bis 0.4.0 hieß der Eintrag „Lotse“: ein solcher zieht beim ersten Lesen um.
+fn saved_secret(slot: &str) -> Option<String> {
+    let entry = saved(slot)?;
+    entry.get_password().ok().or_else(|| {
+        let old = keyring::Entry::new("Lotse", slot).ok()?;
+        let secret = old.get_password().ok()?;
+        entry.set_password(&secret).ok()?;
+        let _ = old.delete_credential();
+        Some(secret)
+    })
 }
 
 #[tauri::command]
@@ -109,12 +122,12 @@ pub async fn ssh_connect(
     rows: u32,
     on_data: Channel<InvokeResponseBody>,
 ) -> Result<u32, ConnectError> {
-    // Ohne Eingabe das gemerkte oder gespeicherte Geheimnis probieren, damit Lotse nicht unnötig nachfragt.
+    // Ohne Eingabe das gemerkte oder gespeicherte Geheimnis probieren, damit Hostess nicht unnötig nachfragt.
     let typed = secret.is_some();
     let slot = secret_slot(&host);
     let secret = secret
         .or_else(|| app.secrets.lock().unwrap().get(&slot).cloned())
-        .or_else(|| saved(&slot)?.get_password().ok());
+        .or_else(|| saved_secret(&slot));
     // Stimmt das gemerkte Geheimnis nicht mehr, wird es überall verworfen.
     let forget = || {
         app.secrets.lock().unwrap().remove(&slot);
@@ -137,7 +150,7 @@ pub async fn ssh_connect(
     };
     if let Some(secret) = secret {
         if remember {
-            // Klappt das Speichern nicht, läuft die Verbindung trotzdem; Lotse fragt dann beim nächsten Start wieder.
+            // Klappt das Speichern nicht, läuft die Verbindung trotzdem; Hostess fragt dann beim nächsten Start wieder.
             if let Some(entry) = saved(&slot) {
                 let _ = entry.set_password(&secret);
             }
@@ -179,6 +192,22 @@ pub async fn ssh_disconnect(app: State<'_, App>, id: u32) -> Result<(), String> 
         let _ = conn.handle.disconnect(russh::Disconnect::ByApplication, "", "").await;
     }
     Ok(())
+}
+
+/// Antwortzeit der Verbindung in Millisekunden: eine Keepalive-Anfrage, die jeder Server beantwortet.
+#[tauri::command]
+pub async fn ssh_ping(app: State<'_, App>, id: u32) -> Result<u32, String> {
+    let conn = app.conn(id)?;
+    let start = Instant::now();
+    tokio::time::timeout(Duration::from_secs(5), conn.handle.send_ping())
+        .await
+        .map_err(|_| "keine Antwort")?
+        .map_err(text)?;
+    // russh meldet auch dann Erfolg, wenn die Verbindung beim Warten abgerissen ist.
+    if conn.handle.is_closed() {
+        return Err("keine Antwort".into());
+    }
+    Ok(start.elapsed().as_millis() as u32)
 }
 
 #[tauri::command]

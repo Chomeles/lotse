@@ -14,10 +14,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            // LOTSE_DATA_DIR lenkt den Datenordner um (für Tests, damit echte Hosts unberührt bleiben).
-            let dir = match std::env::var_os("LOTSE_DATA_DIR") {
+            // HOSTESS_DATA_DIR lenkt den Datenordner um (für Tests, damit echte Hosts unberührt bleiben).
+            let dir = match std::env::var_os("HOSTESS_DATA_DIR") {
                 Some(dir) => dir.into(),
-                None => app.path().app_data_dir()?,
+                None => {
+                    let dir = app.path().app_data_dir()?;
+                    // Bis 0.4.0 hieß das Programm „Lotse“: dessen Datenordner zieht einmalig um.
+                    let old = dir.with_file_name("de.lotse.client");
+                    if !dir.exists() && old.exists() {
+                        std::fs::rename(old, &dir)?;
+                    }
+                    dir
+                }
             };
             std::fs::create_dir_all(&dir)?;
             app.manage(commands::App::new(dir));
@@ -28,6 +36,7 @@ pub fn run() {
             commands::ssh_write,
             commands::ssh_resize,
             commands::ssh_disconnect,
+            commands::ssh_ping,
             commands::known_host_remove,
             commands::known_hosts_list,
             commands::keys_list,

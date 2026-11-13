@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn unbekannt_bekannt_geaendert_entfernt() {
-        let path = std::env::temp_dir().join(format!("lotse-known-hosts-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("hostess-known-hosts-{}", std::process::id()));
         let _ = fs::remove_file(&path);
         let (a, b, other) = (key(), key(), key());
 
@@ -131,12 +131,12 @@ mod tests {
 
     #[test]
     fn fehlende_datei_ist_eine_leere_liste() {
-        assert_eq!(list(&std::env::temp_dir().join("lotse-known-hosts-gibt-es-nicht")).unwrap(), []);
+        assert_eq!(list(&std::env::temp_dir().join("hostess-known-hosts-gibt-es-nicht")).unwrap(), []);
     }
 
     #[test]
     fn anderer_schluesseltyp_gilt_als_geaendert() {
-        let path = std::env::temp_dir().join(format!("lotse-known-hosts-typ-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("hostess-known-hosts-typ-{}", std::process::id()));
         let _ = fs::remove_file(&path);
         learn(&path, "srv", 22, &key()).unwrap();
         let ecdsa = PrivateKey::random(&mut rand::rng(), Algorithm::Ecdsa { curve: russh::keys::EcdsaCurve::NistP256 })

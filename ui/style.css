@@ -1,4 +1,4 @@
-/* Lotse – Stile nach dem Design-Entwurf (Farben, Abstände und Klassennamen von dort). */
+/* Hostess – Stile nach dem Design-Entwurf (Farben, Abstände und Klassennamen von dort). */
 :root {
   --term: #0d1117;
   --bg: #0a0d12;
@@ -51,6 +51,12 @@ button > * { pointer-events: none; }
 .host.on { background: var(--raise); }
 .hmain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; background: none; text-align: left; border-radius: 8px; }
 .ht { display: flex; flex-direction: column; min-width: 0; }
+.hs { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; }
+.ms { font: 10px var(--mono); white-space: nowrap; }
+.ms:empty { display: none; }
+.ms.g { color: var(--green); }
+.ms.a { color: var(--amber); }
+.ms.r { color: var(--red); }
 .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .a { font: 12px var(--mono); color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
 .host .edit { opacity: 0; }

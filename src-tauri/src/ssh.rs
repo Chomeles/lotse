@@ -146,7 +146,7 @@ fn load_key(host: &Host, passphrase: Option<&str>) -> Result<PrivateKey, Connect
         Err(russh::keys::Error::IO(e)) => Err(other(format!("Schlüsseldatei {} nicht lesbar: {e}", host.key_path))),
         Err(_) if passphrase.is_some() => Err(ConnectError::NeedPassphrase { wrong: true }),
         Err(e) => Err(other(format!(
-            "{} ist kein privater Schlüssel, den Lotse lesen kann (OpenSSH, PEM oder PuTTY-ppk): {e}",
+            "{} ist kein privater Schlüssel, den Hostess lesen kann (OpenSSH, PEM oder PuTTY-ppk): {e}",
             host.key_path
         ))),
     }

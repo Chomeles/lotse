@@ -4,6 +4,11 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.5.0 – 2026-11-13
+- Das Programm heißt jetzt „Hostess“ statt „Lotse“ (Fenster, Installer, Programmdatei `hostess.exe`, Webseite). Daten und gespeicherte Passphrasen ziehen beim ersten Start von selbst um: der Ordner `%APPDATA%\de.lotse.client` wird zu `de.hostess.client`, Einträge „Lotse“ in der Windows-Anmeldeinformationsverwaltung werden zu „Hostess“
+- Die Umgebungsvariablen heißen `HOSTESS_DATA_DIR` und `HOSTESS_SSH_DIR`; neue Installationen laden eingefügte Dateien nach `~/hostess-paste` (eine schon gespeicherte Einstellung bleibt)
+- Hostliste: unter dem Statuspunkt eines verbundenen Hosts steht die Antwortzeit der SSH-Verbindung, alle 5 Sekunden neu gemessen; grün unter 200 ms, gelb ab 200 ms, rot ab 1 s oder wenn der Server 5 s lang nicht antwortet
+
 ## 0.4.0 – 2026-11-12
 - Neues Aussehen nach dem Design-Entwurf: eigene Titelleiste mit Reitern und Fensterknöpfen, Statuspunkte (verbunden, verbindet, getrennt) in Hostliste, Reiter und Kopfzeile, Leerzustand mit Tastenkürzeln, Dateimanager mit Symbolknöpfen und Fortschrittsbalken, Suche mit Trefferzahl, neues Logo und App-Icon
 - „Verwaltung“ statt Einstellungs-Dialog: Bereiche links, Einstellungen wirken sofort (kein Speichern-Knopf), öffentlicher Schlüssel klappt in der Karte auf
