@@ -20,12 +20,18 @@ export async function checkUpdate() {
   return found?.version ?? null;
 }
 
-// Prüft beim Start und danach alle 6 Stunden, ohne bei Fehlern zu stören.
+// Prüft beim Start, danach alle 30 Minuten und wenn man nach einer Pause von mindestens 10 Minuten ins Fenster
+// zurückkommt, ohne bei Fehlern zu stören. Die Antwort ist eine kleine Datei; installiert wird nie von selbst.
 // `confirm()` fragt vor dem Installieren nach, falls nötig, und liefert, ob es weitergehen darf.
 export function watchUpdates(confirm) {
-  const quiet = () => checkUpdate().catch((e) => console.warn('Update-Prüfung fehlgeschlagen:', e));
+  let last = 0;
+  const quiet = () => {
+    last = Date.now();
+    checkUpdate().catch((e) => console.warn('Update-Prüfung fehlgeschlagen:', e));
+  };
   quiet();
-  setInterval(quiet, 6 * 60 * 60 * 1000);
+  setInterval(quiet, 30 * 60 * 1000);
+  window.addEventListener('focus', () => Date.now() - last > 10 * 60 * 1000 && quiet());
 
   button.addEventListener('click', async () => {
     if (installing || !found || !(await confirm())) return;

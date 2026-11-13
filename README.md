@@ -1,4 +1,4 @@
-# Hostess
+﻿# Hostess
 
 Eigener SSH-Client für Windows: Terminal, Hostliste und Dateimanager in einem kleinen Programm.
 Gebaut mit Tauri 2 (Rust) und xterm.js, ohne Node und ohne Bundler.
@@ -31,7 +31,7 @@ und gibt Testschlüssel aus. Für SFTP und Befehle nutzt er `sftp-server.exe` un
 Strg + D beendet dort die Shell wie `exit`.
 
 ## Veröffentlichen
-Hostess sucht beim Start und danach alle 6 Stunden unter `https://sharko-it.de/hostess/dl/latest.json` nach einer
+Hostess sucht beim Start und danach alle 30 Minuten unter `https://sharko-it.de/hostess/dl/latest.json` nach einer
 neueren Version und installiert sie nach einem Klick. Der Installer muss mit dem privaten Schlüssel signiert sein,
 dessen öffentlicher Teil in `tauri.conf.json` steht. Der private Schlüssel liegt außerhalb des Repos.
 

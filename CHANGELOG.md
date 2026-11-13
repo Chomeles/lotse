@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.11.1 – 2026-11-13
+- Hostess sucht jetzt alle 30 Minuten nach Updates statt alle 6 Stunden, und zusätzlich, wenn man nach einer Pause ins Fenster zurückkommt. Installiert wird weiterhin erst nach einem Klick
+
 ## 0.11.0 – 2026-11-13
 - Dateimanager: Pfeiltasten, Pos1 und Ende bewegen die Auswahl, mit Umschalt erweitern sie sie. F2 benennt den gewählten Eintrag um. Mit gedrückter Maustaste lässt sich ein Auswahlrahmen über die Liste ziehen (mit Strg zusätzlich zur bisherigen Auswahl)
 
