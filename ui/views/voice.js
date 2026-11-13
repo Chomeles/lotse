@@ -29,10 +29,11 @@ export function edit(old, next) {
   return { del: a.length - same, text: b.slice(same).join('') };
 }
 
-// `button` ist der Mikrofon-Knopf. `getModel()` liefert die id des gewählten Modells. `onEdit(del, text)` löscht
+// `button` ist der Mikrofon-Knopf. `getModel()` liefert die id des gewählten Modells, `getLang()` das
+// Sprachkürzel oder '' (Whisper erkennt die Sprache selbst). `onEdit(del, text)` löscht
 // die letzten `del` Zeichen und schreibt `text` an die Schreibmarke. `onSetup(grund, zuruecksetzen)` führt in die
 // Verwaltung, wenn kein brauchbares Modell gewählt ist.
-export function createVoice(button, { getModel, onEdit, onSetup }) {
+export function createVoice(button, { getModel, getLang, onEdit, onSetup }) {
   // '' wartet, 'start' öffnet das Mikrofon, 'rec' nimmt auf und erkennt laufend, 'busy' erkennt den Rest.
   let state = '';
   let rec = null;
@@ -94,7 +95,7 @@ export function createVoice(button, { getModel, onEdit, onSetup }) {
       samples.set(chunk.data, at);
       at += chunk.data.length;
     }
-    const text = (await api.voiceTranscribe(taken.id, samples)).replace(/\s+/g, ' ').trim();
+    const text = (await api.voiceTranscribe(taken.id, samples, getLang())).replace(/\s+/g, ' ').trim();
     if (run !== mine) return;
     const done = last || quiet >= PAUSE || length >= LONGEST;
     // Mitten im Satz rät Whisper das letzte Wort oft falsch und setzt jedes Mal einen Punkt. Gezeigt wird

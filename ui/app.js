@@ -11,7 +11,7 @@ import { createVoice } from './views/voice.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/hostess-paste', voice_model: '' } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/hostess-paste', voice_model: '', voice_lang: '' } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -198,6 +198,7 @@ function openTab(host) {
   // Erkennung nachbessert; als Einfügung (term.paste) kämen sie im Programm nicht als Rücktaste an.
   tab.voice = createVoice(pane.querySelector('.mic'), {
     getModel: () => store.settings.voice_model,
+    getLang: () => store.settings.voice_lang,
     onEdit: (del, text) => {
       tab.sending = tab.sending.then(() => tab.id && api.sshWrite(tab.id, ''.repeat(del) + text)).catch(() => {});
     },

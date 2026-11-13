@@ -228,14 +228,16 @@ fn threads(logical: usize) -> i32 {
     (if logical > 4 { logical / 2 } else { logical }).min(8) as i32
 }
 
-/// Wandelt Sprache in Text. `samples`: 16 kHz, mono. Die Sprache erkennt Whisper selbst.
-pub fn transcribe(context: &WhisperContext, samples: &[f32]) -> Result<String, String> {
+/// Wandelt Sprache in Text. `samples`: 16 kHz, mono. `lang` ist ein Sprachkürzel wie "de"; leer oder
+/// unbekannt heißt: Whisper erkennt die Sprache selbst. Das kostet einen zweiten Rechengang und rät bei
+/// kurzen Schnipseln öfter falsch.
+pub fn transcribe(context: &WhisperContext, samples: &[f32], lang: &str) -> Result<String, String> {
     let failed = |e| format!("Die Spracherkennung ist fehlgeschlagen: {e}");
     // Whisper verarbeitet nichts unter einer Sekunde, also mit Stille auffüllen.
     let mut samples = samples.to_vec();
     samples.resize(samples.len().max(17_600), 0.0);
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_language(Some("auto"));
+    params.set_language(Some(if whisper_rs::get_lang_id(lang).is_some() { lang } else { "auto" }));
     params.set_n_threads(threads(std::thread::available_parallelism().map_or(4, |n| n.get())));
     // Keine Geräusch-Vermerke wie „[Musik]“: der Text landet im Terminal.
     params.set_suppress_nst(true);
@@ -333,7 +335,8 @@ mod tests {
             wav[data..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
         let context = load(Path::new(&model)).unwrap();
         let start = std::time::Instant::now();
-        let text = transcribe(&context, &samples).unwrap();
+        let lang = std::env::var("HOSTESS_VOICE_LANG").unwrap_or_default();
+        let text = transcribe(&context, &samples, &lang).unwrap();
         println!("{text} ({:.1} s)", start.elapsed().as_secs_f32());
         assert!(!text.is_empty());
     }

@@ -80,11 +80,15 @@ export function createFiles(el, getId) {
       <button type="button" class="btn pri" data-act="upload">${icon('upload')}Hochladen</button>
     </div>
     <div class="row th"><span>Name</span><span class="r">Größe</span><span>Geändert</span><span></span></div>
-    <div class="list"><div class="none"><span class="dot a big"></span>Ordner wird geladen …</div></div>
+    <div class="list" tabindex="0" aria-label="Dateien, Mehrfachauswahl mit Strg oder Umschalt" aria-multiselectable="true"><div class="none"><span class="dot a big"></span>Ordner wird geladen …</div></div>
     <div class="sbar" role="status">
       <span class="smsg"></span>
       <div class="bar" hidden><span></span></div>
       <span class="mono pct" hidden></span>
+      <span class="ssel" hidden>
+        <button type="button" class="btn sm" data-act="downloadSel">${icon('download')}Herunterladen</button>
+        <button type="button" class="btn sm danger" data-act="deleteSel">${icon('trash')}Löschen</button>
+      </span>
       <span class="sdisk" hidden></span>
     </div>`;
   const pathInput = el.querySelector('.path');
@@ -97,6 +101,36 @@ export function createFiles(el, getId) {
   let entries = [];
   let busy = false;
   const diskLabel = status.querySelector('.sdisk');
+  // Mehrfachauswahl wie im Explorer: Namen der markierten Einträge und die Zeile, von der Umschalt aus zählt.
+  const selected = new Set();
+  let anchor = null;
+  const chosen = () => entries.filter((e) => selected.has(e.name));
+
+  // Zeigt die Auswahl in der Liste und in der Statuszeile.
+  const mark = () => {
+    [...list.children].forEach((row, i) => {
+      const on = selected.has(entries[i]?.name);
+      row.classList.toggle('sel', on);
+      row.setAttribute('aria-selected', on);
+    });
+    if (!busy) say('');
+  };
+  // Klick auf Zeile `i`: allein wählt nur sie, Strg nimmt sie dazu oder heraus, Umschalt wählt den Bereich
+  // ab der zuletzt angeklickten Zeile (mit Strg zusätzlich zur bisherigen Auswahl).
+  const pick = (i, e) => {
+    if (e.shiftKey && anchor !== null) {
+      if (!e.ctrlKey) selected.clear();
+      for (let n = Math.min(anchor, i); n <= Math.max(anchor, i); n++) selected.add(entries[n].name);
+    } else if (e.ctrlKey) {
+      if (!selected.delete(entries[i].name)) selected.add(entries[i].name);
+      anchor = i;
+    } else {
+      selected.clear();
+      selected.add(entries[i].name);
+      anchor = i;
+    }
+    mark();
+  };
 
   // Rechts in der Statuszeile: freier Platz auf dem Datenträger des Ordners, gelb ab 90 % belegt, rot ab 97 %.
   // Meldet der Server nichts (kein OpenSSH), bleibt die Stelle leer.
@@ -113,7 +147,12 @@ export function createFiles(el, getId) {
   const say = (text, error = false) => {
     const dirs = entries.filter((e) => e.is_dir).length;
     const bytes = entries.reduce((sum, e) => sum + (e.is_dir ? 0 : e.size), 0);
-    const rest = path === null ? '' : `${count(dirs, 'Ordner', 'Ordner')}, ${count(entries.length - dirs, 'Datei', 'Dateien')}${bytes ? ` · ${size(bytes)}` : ''}`;
+    const picked = chosen();
+    const pickedBytes = picked.reduce((sum, e) => sum + (e.is_dir ? 0 : e.size), 0);
+    const rest = path === null ? ''
+      : picked.length ? `${picked.length} ausgewählt${pickedBytes ? ` · ${size(pickedBytes)}` : ''}`
+        : `${count(dirs, 'Ordner', 'Ordner')}, ${count(entries.length - dirs, 'Datei', 'Dateien')}${bytes ? ` · ${size(bytes)}` : ''}`;
+    status.querySelector('.ssel').hidden = Boolean(text) || !picked.length;
     status.querySelector('.smsg').textContent = text || rest;
     status.className = `sbar ${error ? 'err' : text ? 'msg' : ''}`;
     bar.hidden = pct.hidden = true;
@@ -135,7 +174,7 @@ export function createFiles(el, getId) {
   function render() {
     pathInput.value = path;
     if (!entries.length) return note('Dieser Ordner ist leer');
-    list.replaceChildren(...entries.map((entry) => {
+    list.replaceChildren(...entries.map((entry, i) => {
       const name = esc(entry.name);
       const row = document.createElement('div');
       row.className = 'row';
@@ -148,10 +187,24 @@ export function createFiles(el, getId) {
           <button type="button" class="ib" data-act="rename" aria-label="${name} umbenennen" title="Umbenennen">${icon('edit')}</button>
           <button type="button" class="ib del" data-act="delete" aria-label="${name} löschen" title="Löschen">${icon('trash')}</button>
         </span>`;
-      row.addEventListener('click', (e) => run(e.target.dataset.act, entry));
-      // Rechtsklick: dieselben Aktionen wie die Symbole rechts, als Menü.
+      // Mit Strg oder Umschalt und neben dem Namen wird ausgewählt; ein einfacher Klick auf den Namen öffnet.
+      row.addEventListener('click', (e) => {
+        const act = e.target.dataset.act;
+        if (e.ctrlKey || e.shiftKey || !act) pick(i, e);
+        else run(act, entry);
+      });
+      // Umschalt + Klick würde sonst Text in der Liste markieren.
+      row.addEventListener('mousedown', (e) => e.shiftKey && e.preventDefault());
+      // Rechtsklick: dieselben Aktionen wie die Symbole rechts, als Menü. Auf einer Mehrfachauswahl gelten sie
+      // für alle markierten Einträge.
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        if (selected.size > 1 && selected.has(entry.name)) {
+          return showMenu(e.clientX, e.clientY, [
+            [`${selected.size} herunterladen`, 'download', () => run('downloadSel')],
+            [`${selected.size} löschen`, 'trash', () => run('deleteSel'), 'del'],
+          ]);
+        }
         showMenu(e.clientX, e.clientY, [
           entry.is_dir ? ['Öffnen', 'folder', () => run('open', entry)] : ['Herunterladen', 'download', () => run('download', entry)],
           ['Umbenennen', 'edit', () => run('rename', entry)],
@@ -166,6 +219,9 @@ export function createFiles(el, getId) {
     const listing = await api.sftpList(getId(), target);
     path = listing.path;
     entries = listing.entries;
+    // Die Auswahl gilt nur für das, was gerade zu sehen ist.
+    selected.clear();
+    anchor = null;
     showDisk(listing.disk, listing.mode);
     render();
   }
@@ -233,6 +289,46 @@ export function createFiles(el, getId) {
       await api.sftpDownload(getId(), join(entry.name), local, (percent) => progress(`${entry.name} wird heruntergeladen`, percent));
       return `${entry.name} heruntergeladen nach ${local}`;
     },
+    // Alle markierten Dateien in einen Ordner auf diesem Rechner. Ordner lädt Hostess nicht herunter.
+    async downloadSel() {
+      const files = chosen().filter((e) => !e.is_dir);
+      const skipped = selected.size - files.length;
+      if (!files.length) throw 'Ordner lassen sich nicht herunterladen, nur Dateien.';
+      const dir = await window.__TAURI__.dialog.open({ title: `${count(files.length, 'Datei', 'Dateien')} speichern in`, directory: true });
+      if (!dir) return;
+      let done = 0;
+      for (const file of files) {
+        const nth = files.length > 1 ? ` (${done + 1} von ${files.length})` : '';
+        await api.sftpDownload(getId(), join(file.name), `${dir}\\${file.name}`, (percent) => progress(`${file.name} wird heruntergeladen${nth}`, percent));
+        done += 1;
+      }
+      return `${count(done, 'Datei', 'Dateien')} heruntergeladen nach ${dir}${skipped ? ` · ${count(skipped, 'Ordner', 'Ordner')} übersprungen` : ''}`;
+    },
+    async deleteSel() {
+      const picked = chosen();
+      if (!picked.length) return;
+      if (picked.length === 1) return actions.delete(picked[0]);
+      const dirs = picked.filter((e) => e.is_dir).length;
+      const names = picked.slice(0, 8).map((e) => (e.is_dir ? `${e.name}/` : e.name)).join('\n');
+      const warning = [
+        `In ${path}:\n${names}${picked.length > 8 ? `\n… und ${picked.length - 8} weitere` : ''}`,
+        dirs ? `${count(dirs, 'Ordner wird', 'Ordner werden')} samt Inhalt gelöscht.` : '',
+        'Das passiert auf dem Server und lässt sich nicht rückgängig machen. Einen Papierkorb gibt es dort nicht.',
+        dirs && path === '/' ? 'Achtung: Diese Ordner liegen direkt unter /. Das sind vermutlich Systemordner.' : '',
+      ].filter(Boolean).join('\n\n');
+      if (!(await ask(`${picked.length} Einträge löschen?`, warning, 'Löschen', true))) return;
+      let done = 0;
+      try {
+        for (const entry of picked) {
+          await api.sftpDelete(getId(), join(entry.name), entry.is_dir);
+          done += 1;
+        }
+      } finally {
+        // Auch nach einem Fehler zeigen, was schon weg ist.
+        await load(path).catch(() => {});
+      }
+      return `${count(done, 'Eintrag', 'Einträge')} gelöscht`;
+    },
   };
 
   // Führt eine Aktion aus, immer nur eine zur Zeit, und zeigt Ergebnis oder Fehler in der Statuszeile.
@@ -255,6 +351,20 @@ export function createFiles(el, getId) {
   }
 
   el.querySelector('.fbar').addEventListener('click', (e) => run(e.target.dataset.act));
+  status.addEventListener('click', (e) => run(e.target.dataset.act));
+  // Tastatur in der Liste: Strg + A wählt alles, Esc hebt die Auswahl auf, Entf löscht die Auswahl.
+  list.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      for (const entry of entries) selected.add(entry.name);
+      mark();
+    } else if (e.key === 'Escape' && selected.size) {
+      selected.clear();
+      mark();
+    } else if (e.key === 'Delete' && selected.size) {
+      run('deleteSel');
+    }
+  });
   pathInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') run('go');
   });

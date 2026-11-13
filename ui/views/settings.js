@@ -60,6 +60,11 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
           </div>
           <div class="card"></div>
           <span class="hint device" role="status"></span>
+          <label class="set"><span><span>Sprache</span><span class="hint">In welcher Sprache du sprichst. Fest gewählt ist die Erkennung schneller und verrutscht nicht in eine andere Sprache</span></span>
+            <select class="in" name="voice_lang">
+              ${[['', 'Automatisch erkennen'], ['de', 'Deutsch'], ['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'], ['nl', 'Nederlands'], ['pl', 'Polski'], ['pt', 'Português'], ['tr', 'Türkçe'], ['ru', 'Русский'], ['uk', 'Українська'], ['ar', 'العربية'], ['ja', '日本語'], ['zh', '中文']]
+                .map(([id, name]) => `<option value="${id}"${id === (settings.voice_lang ?? '') ? ' selected' : ''}>${name}</option>`).join('')}
+            </select></label>
           <h4>Mikrofon testen</h4>
           <div class="card mictest">
             <div class="info">
@@ -256,6 +261,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
     polling = false;
   }
   range.addEventListener('input', showModel);
+  form.elements.voice_lang.addEventListener('change', (e) => onChange({ ...getSettings(), voice_lang: e.target.value }));
   card.addEventListener('click', async (e) => {
     const m = models?.[range.value];
     const act = e.target.dataset.do;

@@ -22,11 +22,13 @@ pub struct Settings {
     pub paste_dir: String,
     /// Sprachmodell für die Spracheingabe (id aus `voice::MODELS`). Leer = keins gewählt.
     pub voice_model: String,
+    /// Sprache der Spracheingabe als Kürzel ("de", "en", …). Leer = Whisper erkennt sie selbst.
+    pub voice_lang: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/hostess-paste".into(), voice_model: String::new() }
+        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/hostess-paste".into(), voice_model: String::new(), voice_lang: String::new() }
     }
 }
 

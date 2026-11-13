@@ -210,6 +210,10 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .sbar.err { color: var(--red); }
 .sbar .smsg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
 .sbar .i { color: var(--green); }
+.list .row.sel { background: rgba(74, 222, 128, .1); }
+.list { user-select: none; }
+.list:focus-visible { outline: none; }
+.sbar .ssel { display: flex; gap: 6px; }
 .sbar .sdisk { margin-left: auto; white-space: nowrap; color: var(--mute); }
 .sbar .sdisk.a { color: var(--amber); }
 .sbar .sdisk.r { color: var(--red); }

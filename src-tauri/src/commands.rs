@@ -521,7 +521,7 @@ pub async fn voice_preload(app: State<'_, App>, id: String) -> Result<(), String
 }
 
 /// Wandelt eine Aufnahme in Text. Der Körper der Anfrage sind die rohen Samples (Float32, Little Endian,
-/// 16 kHz, mono), die id des Modells steht im Kopf `model`. Leerer Text heißt: nichts Gesprochenes erkannt.
+/// 16 kHz, mono), die id des Modells steht im Kopf `model`, das Sprachkürzel (oder nichts) im Kopf `lang`. Leerer Text heißt: nichts Gesprochenes erkannt.
 #[tauri::command]
 pub async fn voice_transcribe(app: State<'_, App>, request: Request<'_>) -> Result<String, String> {
     let InvokeBody::Raw(bytes) = request.body() else {
@@ -529,7 +529,8 @@ pub async fn voice_transcribe(app: State<'_, App>, request: Request<'_>) -> Resu
     };
     let id = request.headers().get("model").and_then(|id| id.to_str().ok()).unwrap_or_default();
     let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
-    with_voice(&app, id, move |context| voice::transcribe(context, &samples)).await
+    let lang = request.headers().get("lang").and_then(|lang| lang.to_str().ok()).unwrap_or_default().to_string();
+    with_voice(&app, id, move |context| voice::transcribe(context, &samples, &lang)).await
 }
 
 #[cfg(test)]

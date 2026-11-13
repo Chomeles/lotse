@@ -66,8 +66,8 @@ export const api = {
   voicePreload: (id) => invoke('voice_preload', { id }),
   // `samples` ist ein Float32Array mit 16 kHz, mono. Es geht als rohe Bytes hinüber, die id des Modells im Kopf.
   // Liefert den Text; leer, wenn nichts Gesprochenes erkannt wurde.
-  voiceTranscribe: (id, samples) =>
-    invoke('voice_transcribe', new Uint8Array(samples.buffer), { headers: { model: id } }),
+  voiceTranscribe: (id, samples, lang = '') =>
+    invoke('voice_transcribe', new Uint8Array(samples.buffer), { headers: { model: id, lang } }),
 };
 
 function progress(onProgress) {
