@@ -253,7 +253,7 @@ const askSecret = async ({ title, intro, subject, label, wrong, ok }) => {
       ${wrong ? errorHint(wrong) : ''}
 </label>
     <label class="check"><input type="checkbox" name="remember"><span>${label} speichern</span></label>
-    <span class="hint">Ohne Haken nur im Arbeitsspeicher, bis du Hostess beendest. Mit Haken verschlüsselt in der Windows-Anmeldeinformationsverwaltung, Hostess fragt dann nicht mehr.</span>
+    <span class="hint">Gilt nur für diesen Host. Ohne Haken nur im Arbeitsspeicher, bis du Hostess beendest. Mit Haken verschlüsselt in der Windows-Anmeldeinformationsverwaltung, Hostess fragt dann bei diesem Host nicht mehr.</span>
     <div class="acts">
       <button value="" formnovalidate class="btn">Abbrechen</button>
       <button value="ok" class="btn pri">${ok}</button>

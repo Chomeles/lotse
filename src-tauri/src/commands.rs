@@ -42,7 +42,7 @@ pub struct App {
     dir: PathBuf,
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
-    /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
+    /// Passphrasen und Passwörter je Host (siehe `secret_slot`),
     /// im Arbeitsspeicher, bis Hostess beendet wird. Dauerhaft gespeicherte liegen in `saved`.
     secrets: Mutex<HashMap<String, String>>,
     /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
@@ -105,31 +105,16 @@ fn ssh_dir() -> Result<PathBuf, String> {
     }
 }
 
-/// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt.
+/// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt: immer je Host, nie je Schlüsseldatei.
+/// Sonst würde ein für einen Host gespeicherter Schlüssel alle anderen Hosts mit derselben Datei mit entsperren.
 fn secret_slot(host: &Host) -> String {
-    if host.key_path.is_empty() {
-        format!("{}@{}:{}", host.user, host.address, host.port)
-    } else {
-        host.key_path.clone()
-    }
+    format!("{}@{}:{}", host.user, host.address, host.port)
 }
 
 /// Dauerhaft gespeichertes Geheimnis: ein Eintrag „Hostess“ in der Windows-Anmeldeinformationsverwaltung,
 /// verschlüsselt mit dem Windows-Konto. In `store.json` steht nie ein Geheimnis.
 fn saved(slot: &str) -> Option<keyring::Entry> {
     keyring::Entry::new("Hostess", slot).ok()
-}
-
-/// Liest das gespeicherte Geheimnis. Bis 0.4.0 hieß der Eintrag „Lotse“: ein solcher zieht beim ersten Lesen um.
-fn saved_secret(slot: &str) -> Option<String> {
-    let entry = saved(slot)?;
-    entry.get_password().ok().or_else(|| {
-        let old = keyring::Entry::new("Lotse", slot).ok()?;
-        let secret = old.get_password().ok()?;
-        entry.set_password(&secret).ok()?;
-        let _ = old.delete_credential();
-        Some(secret)
-    })
 }
 
 #[tauri::command]
@@ -148,7 +133,14 @@ pub async fn ssh_connect(
     let slot = secret_slot(&host);
     let secret = secret
         .or_else(|| app.secrets.lock().unwrap().get(&slot).cloned())
-        .or_else(|| saved_secret(&slot));
+        .or_else(|| saved(&slot)?.get_password().ok());
+    // Bis 0.6.0 lag die Passphrase je Schlüsseldatei und galt damit für alle Hosts mit dieser Datei:
+    // ein solcher Eintrag wird entfernt, der Host fragt dann einmal neu.
+    if !host.key_path.is_empty() {
+        if let Some(old) = saved(&host.key_path) {
+            let _ = old.delete_credential();
+        }
+    }
     // Stimmt das gemerkte Geheimnis nicht mehr, wird es überall verworfen.
     let forget = || {
         app.secrets.lock().unwrap().remove(&slot);
@@ -524,4 +516,21 @@ pub async fn voice_transcribe(app: State<'_, App>, request: Request<'_>) -> Resu
     let id = request.headers().get("model").and_then(|id| id.to_str().ok()).unwrap_or_default();
     let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
     with_voice(&app, id, move |context| voice::transcribe(context, &samples)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{secret_slot, Host};
+
+    #[test]
+    fn gleicher_schluessel_entsperrt_keinen_anderen_host() {
+        let host = |name: &str, address: &str| Host {
+            name: name.into(),
+            address: address.into(),
+            port: 22,
+            user: "root".into(),
+            key_path: "~/.ssh/id_ed25519".into(),
+        };
+        assert_ne!(secret_slot(&host("a", "eins.example")), secret_slot(&host("b", "zwei.example")));
+    }
 }
