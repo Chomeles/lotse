@@ -30,5 +30,36 @@ Schlüssel und SSH-Config liest Hostess aus `~/.ssh`; `HOSTESS_SSH_DIR` lenkt au
 und gibt Testschlüssel aus. Für SFTP und Befehle nutzt er `sftp-server.exe` und `bash.exe` von Git für Windows.
 Strg + D beendet dort die Shell wie `exit`.
 
+## Veröffentlichen
+Hostess sucht beim Start und danach alle 6 Stunden unter `https://sharko-it.de/hostess/dl/latest.json` nach einer
+neueren Version und installiert sie nach einem Klick. Der Installer muss mit dem privaten Schlüssel signiert sein,
+dessen öffentlicher Teil in `tauri.conf.json` steht. Der private Schlüssel liegt außerhalb des Repos.
+
+1. Nummer in `src-tauri/Cargo.toml` erhöhen.
+2. Signiert bauen (PowerShell, in `src-tauri`):
+   ```
+   $env:TAURI_SIGNING_PRIVATE_KEY = "<Pfad zur Schlüsseldatei>"
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+   cargo tauri build
+   ```
+3. Unter `target/release/bundle/nsis` liegen danach `Hostess_<Version>_x64-setup.exe` und daneben
+   `Hostess_<Version>_x64-setup.exe.sig`.
+4. Die `-setup.exe` auf den Server legen und zuletzt die `latest.json` ersetzen:
+   ```json
+   {
+     "version": "<Version>",
+     "notes": "Was neu ist, in einem Satz",
+     "pub_date": "2026-01-31T12:00:00Z",
+     "platforms": {
+       "windows-x86_64": {
+         "signature": "<Inhalt der .sig-Datei>",
+         "url": "https://sharko-it.de/hostess/dl/Hostess_<Version>_x64-setup.exe"
+       }
+     }
+   }
+   ```
+
+Die Daten in `%APPDATA%\de.hostess.client` fasst ein Update nicht an.
+
 ## Versionen
 Siehe [CHANGELOG.md](CHANGELOG.md). Die Nummer steht nur in `src-tauri/Cargo.toml`.

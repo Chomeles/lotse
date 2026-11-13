@@ -52,6 +52,20 @@ export const api = {
   pasteImage: (id, transfer, dir, name, onProgress) =>
     invoke('paste_image', { id, transfer, dir, name, onProgress: progress(onProgress) }),
   transferCancel: (transfer) => invoke('transfer_cancel', { transfer }),
+
+  // Spracheingabe. Liefert [{ id, name, note, bytes, installed, loaded, downloading }], vom kleinsten Modell zum
+  // größten. `loaded` sind die schon geladenen Bytes eines angefangenen Downloads.
+  voiceModels: () => invoke('voice_models'),
+  // Lädt herunter oder setzt fort. Liefert true, wenn das Modell fertig ist, false nach `voiceCancel`.
+  voiceDownload: (id) => invoke('voice_download', { id }),
+  voiceCancel: (id) => invoke('voice_cancel', { id }),
+  voiceDelete: (id) => invoke('voice_delete', { id }),
+  // Lädt das Modell schon in den Arbeitsspeicher.
+  voicePreload: (id) => invoke('voice_preload', { id }),
+  // `samples` ist ein Float32Array mit 16 kHz, mono. Es geht als rohe Bytes hinüber, die id des Modells im Kopf.
+  // Liefert den Text; leer, wenn nichts Gesprochenes erkannt wurde.
+  voiceTranscribe: (id, samples) =>
+    invoke('voice_transcribe', new Uint8Array(samples.buffer), { headers: { model: id } }),
 };
 
 function progress(onProgress) {

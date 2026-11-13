@@ -1,15 +1,36 @@
 import { api } from '../api.js';
-import { alertBox, esc, openDialog } from '../dialog.js';
+import { alertBox, ask, errorHint, esc, openDialog } from '../dialog.js';
 import { icon } from '../icons.js';
+import { checkUpdate } from '../update.js';
 
-// Fenster „Verwaltung“ mit drei Bereichen: Einstellungen, Schlüssel, Bekannte Hosts.
-// Alles wirkt sofort: geänderte Einstellungen gehen an `onChange`. `hosts` wird nur gelesen
-// (welcher Host nutzt welchen Schlüssel).
-export async function openSettings(settings, hosts, onChange) {
+const size = (bytes) =>
+  (bytes < 1e9 ? `${Math.round(bytes / 1e6)} MB` : `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB`);
+
+// Vier Punkte, davon `n` gefüllt, und das Wort dazu: die Stufe ist nicht nur an der Farbe zu erkennen.
+const level = (label, n, word) =>
+  `<div class="vrow"><span>${label}</span><span class="pips" aria-hidden="true">${'●'.repeat(n)}${'○'.repeat(4 - n)}</span><span>${word}</span></div>`;
+
+// Lädt ein Sprachmodell und macht es danach zum aktiven. Läuft weiter, wenn die Verwaltung geschlossen wird;
+// den Stand kennt Rust (`voiceModels`), nicht dieses Fenster.
+async function downloadModel(model, getSettings, onChange) {
+  try {
+    if (await api.voiceDownload(model.id)) onChange({ ...getSettings(), voice_model: model.id });
+  } catch (e) {
+    await alertBox(`Modell „${model.name}“ nicht geladen`, String(e));
+  }
+}
+
+// Fenster „Verwaltung“ mit vier Bereichen: Einstellungen, Spracheingabe, Schlüssel, Bekannte Hosts.
+// Alles wirkt sofort: geänderte Einstellungen gehen an `onChange`, `getSettings()` liefert den Stand von jetzt.
+// `hosts` wird nur gelesen (welcher Host nutzt welchen Schlüssel). `area` ist der Bereich, der zuerst offen ist,
+// `hint` ein Satz, warum die Spracheingabe gerade nicht geht.
+export async function openSettings(getSettings, hosts, onChange, area = 'settings', hint = '') {
+  const settings = getSettings();
   const { dialog, done } = openDialog(`
     <nav class="areas" aria-label="Bereiche">
       <h2>Verwaltung</h2>
       <button type="button" class="navbtn on" data-area="settings">${icon('settings')}Einstellungen</button>
+      <button type="button" class="navbtn" data-area="voice">${icon('mic')}Spracheingabe</button>
       <button type="button" class="navbtn" data-area="keys">${icon('key')}Schlüssel</button>
       <button type="button" class="navbtn" data-area="known">${icon('shield')}Bekannte Hosts</button>
     </nav>
@@ -24,7 +45,19 @@ export async function openSettings(settings, hosts, onChange) {
               <input class="in mono" name="font_size" type="number" min="8" max="40" required value="${settings.font_size}"></label>
             <label class="set"><span><span>Ordner für Uploads ins Terminal</span><span class="hint">Auf dem Server, für hereingezogene oder eingefügte Dateien und Bilder. ~/ ist der Startordner, der Ordner wird bei Bedarf angelegt</span></span>
               <input class="in mono" name="paste_dir" required value="${esc(settings.paste_dir)}" spellcheck="false" style="width: 200px; text-align: left"></label>
+            <div class="set"><span><span class="version">Version</span><span class="hint" role="status"></span></span>
+              <button type="button" class="btn check-update">Nach Updates suchen</button></div>
           </div>
+        </section>
+        <section data-area="voice" hidden>
+          <h3>Spracheingabe</h3>
+          ${hint ? errorHint(hint) : ''}
+          <p>Sprechen statt tippen: Das Mikrofon über dem Terminal oder Strg + Umschalt + M nimmt auf, der erkannte Text landet an der Schreibmarke. Die Erkennung läuft auf deinem Rechner, es wird nichts hochgeladen. Das Modell wird einmalig von huggingface.co geladen und bleibt, bis du es löschst.</p>
+          <div class="vrange">
+            <input type="range" min="0" max="3" step="1" aria-label="Modell">
+            <div class="vticks" aria-hidden="true"></div>
+          </div>
+          <div class="card"></div>
         </section>
         <section data-area="keys" hidden>
           <div class="area-head"><h3>Schlüssel</h3>
@@ -51,17 +84,32 @@ export async function openSettings(settings, hosts, onChange) {
   const apply = () => {
     const { scrollback, font_size, paste_dir } = form.elements;
     if (![scrollback, font_size, paste_dir].every((field) => field.checkValidity()) || !paste_dir.value.trim()) return;
+    const current = getSettings();
     const next = {
-      ...settings,
+      ...current,
       scrollback: Number(scrollback.value),
       font_size: Number(font_size.value),
       paste_dir: paste_dir.value.trim(),
     };
-    if (JSON.stringify(next) === JSON.stringify(settings)) return;
-    settings = next;
-    onChange(next);
+    if (JSON.stringify(next) !== JSON.stringify(current)) onChange(next);
   };
   section('settings').addEventListener('change', apply);
+
+  window.__TAURI__.app.getVersion().then((v) => { section('settings').querySelector('.version').textContent = `Version ${v}`; });
+  section('settings').querySelector('.check-update').addEventListener('click', async ({ target }) => {
+    const status = target.closest('.set').querySelector('.hint');
+    target.disabled = true;
+    status.textContent = 'Prüfe …';
+    try {
+      const version = await checkUpdate();
+      status.textContent = version
+        ? `Version ${version} verfügbar. „Installieren“ steht unten in der Seitenleiste.`
+        : 'Hostess ist aktuell.';
+    } catch {
+      status.textContent = 'Prüfung fehlgeschlagen: kein Internet oder Server nicht erreichbar.';
+    }
+    target.disabled = false;
+  });
 
   const failed = (e) => `<div class="none red">${esc(e)}</div>`;
 
@@ -120,9 +168,106 @@ export async function openSettings(settings, hosts, onChange) {
       : '<div class="none">Noch keine bekannten Hosts.<br>Ein Server kommt in diese Liste, sobald du beim ersten Verbinden seinen Fingerabdruck bestätigst.</div>';
   }
 
+  // ---------- Spracheingabe ----------
+  const voice = section('voice');
+  const range = voice.querySelector('input');
+  const card = voice.querySelector('.card');
+  const recommended = navigator.hardwareConcurrency >= 8 ? 'turbo-q5' : 'small';
+  let models = null;
+  let polling = false;
+
+  // Zeichnet die Karte zum Modell unter dem Regler. Neu gebaut wird sie nur, wenn sich der Zustand ändert;
+  // läuft ein Download, ändert sich sonst nur der Balken, damit „Abbrechen“ unter der Maus bleibt.
+  function showModel() {
+    const m = models?.[range.value];
+    if (!m) return;
+    const active = m.installed && getSettings().voice_model === m.id;
+    const part = !m.installed && (m.downloading || m.loaded > 0);
+    const percent = Math.floor(m.loaded * 100 / m.bytes);
+    range.setAttribute('aria-valuetext', `${m.name}, ${size(m.bytes)}`);
+    const key = JSON.stringify([m.id, m.installed, m.downloading, active, part]);
+    if (card.dataset.key !== key) {
+      const focused = card.contains(document.activeElement);
+      const i = Number(range.value);
+      card.dataset.key = key;
+      card.innerHTML = `
+        <div class="info">
+          <div class="title"><strong>${esc(m.name)}</strong><span class="badge">${size(m.bytes)}</span>
+            ${m.id === recommended ? '<span class="badge">Empfohlen für deinen Rechner</span>' : ''}
+            ${active ? '<span class="badge ok">Aktiv</span>' : ''}</div>
+          <span class="hint">${esc(m.note)}</span>
+          ${level('Genauigkeit', i + 1, ['mäßig', 'gut', 'sehr gut', 'am besten'][i])}
+          ${level('Tempo', 4 - i, ['langsam', 'mittel', 'schnell', 'sehr schnell'][3 - i])}
+        </div>
+        <div class="vacts">
+          ${part ? `<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt von ${esc(m.name)}"><span></span></div><span class="hint mono pct"></span>` : ''}
+          ${m.installed && !active ? '<button type="button" class="btn pri" data-do="use">Verwenden</button>' : ''}
+          ${m.downloading ? '<button type="button" class="btn" data-do="cancel">Abbrechen</button>' : ''}
+          ${!m.installed && !m.downloading ? `<button type="button" class="btn pri" data-do="download">${icon('download')}${part ? 'Fortsetzen' : 'Herunterladen'}</button>` : ''}
+          ${!m.downloading && (m.installed || part) ? '<button type="button" class="btn danger" data-do="delete">Löschen</button>' : ''}
+        </div>`;
+      if (focused) (card.querySelector('button') ?? range).focus();
+    }
+    if (part) {
+      card.querySelector('.bar span').style.width = `${percent}%`;
+      card.querySelector('.bar').setAttribute('aria-valuenow', percent);
+      card.querySelector('.pct').textContent = `${percent} %`;
+    }
+  }
+
+  // Fragt den Stand ab, solange der Bereich offen ist: Downloads laufen auch ohne dieses Fenster weiter.
+  async function showVoice() {
+    if (polling) return;
+    polling = true;
+    while (dialog.isConnected && !voice.hidden) {
+      try {
+        const first = !models;
+        models = await api.voiceModels();
+        if (first) {
+          // Der Regler steht auf dem gewählten Modell, sonst auf dem empfohlenen.
+          const chosen = models.findIndex((m) => m.id === getSettings().voice_model);
+          range.value = chosen >= 0 ? chosen : models.findIndex((m) => m.id === recommended);
+          voice.querySelector('.vticks').innerHTML = models.map((m) => `<span>${size(m.bytes)}</span>`).join('');
+        }
+        showModel();
+      } catch (e) {
+        card.innerHTML = failed(e);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    polling = false;
+  }
+  range.addEventListener('input', showModel);
+  card.addEventListener('click', async (e) => {
+    const m = models?.[range.value];
+    const act = e.target.dataset.do;
+    if (!m || !act) return;
+    try {
+      if (act === 'download') {
+        // Sofort als laufend zeigen, damit ein zweiter Klick keinen zweiten Download startet.
+        m.downloading = true;
+        downloadModel(m, getSettings, onChange);
+      } else if (act === 'cancel') {
+        await api.voiceCancel(m.id);
+      } else if (act === 'use') {
+        onChange({ ...getSettings(), voice_model: m.id });
+      } else if (await ask(`Modell „${m.name}“ löschen?`, 'Die Datei wird von diesem Rechner gelöscht. Du kannst das Modell jederzeit neu herunterladen.', 'Löschen', true)) {
+        await api.voiceDelete(m.id);
+        m.installed = false;
+        m.loaded = 0;
+        if (getSettings().voice_model === m.id) onChange({ ...getSettings(), voice_model: '' });
+      }
+    } catch (err) {
+      await alertBox('Spracheingabe', String(err));
+    }
+    showModel();
+  });
+
   function select(area) {
     for (const b of dialog.querySelectorAll('.areas button')) b.classList.toggle('on', b.dataset.area === area);
     for (const s of dialog.querySelectorAll('section')) s.hidden = s.dataset.area !== area;
+    if (area === 'voice') showVoice();
     if (area === 'keys') showKeys();
     if (area === 'known') showKnown();
   }
@@ -181,6 +326,7 @@ export async function openSettings(settings, hosts, onChange) {
     refocus();
   });
 
+  if (area !== 'settings') select(area);
   await done;
   apply();
 }

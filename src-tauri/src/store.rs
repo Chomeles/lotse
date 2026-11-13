@@ -20,11 +20,13 @@ pub struct Settings {
     pub font_size: u32,
     /// Ordner auf dem Server für ins Terminal gezogene oder eingefügte Dateien. `~/` meint den Startordner.
     pub paste_dir: String,
+    /// Sprachmodell für die Spracheingabe (id aus `voice::MODELS`). Leer = keins gewählt.
+    pub voice_model: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/hostess-paste".into() }
+        Self { scrollback: 10_000, font_size: 14, paste_dir: "~/hostess-paste".into(), voice_model: String::new() }
     }
 }
 

@@ -4,6 +4,12 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.6.0 – 2026-11-13
+- Spracheingabe: Mikrofon-Knopf rechts in der Kopfzeile des Reiters (oder Strg + Umschalt + M) nimmt auf, der erkannte Text landet an der Schreibmarke, ohne Enter. Die Erkennung läuft mit Whisper auf dem eigenen Rechner, es wird nichts hochgeladen
+- Verwaltung, neuer Bereich „Spracheingabe“: vier Modelle von 148 MB bis 1,6 GB auf einem Regler, mit Genauigkeit, Tempo und Empfehlung für den eigenen Rechner. Das Modell wird einmalig geladen und bleibt, bis man es löscht; Wechseln lädt nie neu, ein abgebrochener Download wird fortgesetzt und läuft weiter, wenn die Verwaltung zu ist
+- Automatische Updates: Hostess prüft beim Start und alle 6 Stunden, zeigt „Version … verfügbar“ unten in der Seitenleiste und installiert auf Klick; Hosts, Einstellungen, Passphrasen und Sprachmodelle bleiben erhalten. Updates sind signiert und kommen von `sharko-it.de/hostess`. In der Verwaltung gibt es „Nach Updates suchen“
+- Die Webseite liegt jetzt unter https://sharko-it.de/hostess/
+
 ## 0.5.0 – 2026-11-13
 - Das Programm heißt jetzt „Hostess“ statt „Lotse“ (Fenster, Installer, Programmdatei `hostess.exe`, Webseite). Daten und gespeicherte Passphrasen ziehen beim ersten Start von selbst um: der Ordner `%APPDATA%\de.lotse.client` wird zu `de.hostess.client`, Einträge „Lotse“ in der Windows-Anmeldeinformationsverwaltung werden zu „Hostess“
 - Die Umgebungsvariablen heißen `HOSTESS_DATA_DIR` und `HOSTESS_SSH_DIR`; neue Installationen laden eingefügte Dateien nach `~/hostess-paste` (eine schon gespeicherte Einstellung bleibt)

@@ -1,15 +1,17 @@
 import { api } from './api.js';
-import { alertBox, errorHint, esc, openDialog } from './dialog.js';
+import { alertBox, ask, errorHint, esc, openDialog } from './dialog.js';
 import { icon } from './icons.js';
+import { watchUpdates } from './update.js';
 import { createFiles } from './views/files.js';
 import { editHost, renderHosts, updatePings } from './views/hosts.js';
 import { openSettings } from './views/settings.js';
 import { applySettings, createTerminal } from './views/terminal.js';
 import { createUploads } from './views/uploads.js';
+import { createVoice } from './views/voice.js';
 
 const $ = (id) => document.getElementById(id);
 
-let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/hostess-paste' } };
+let store = { version: 1, hosts: [], settings: { scrollback: 10000, font_size: 14, paste_dir: '~/hostess-paste', voice_model: '' } };
 const tabs = new Set();
 
 // ---------- Speicher und Hostliste ----------
@@ -92,9 +94,20 @@ async function importHosts() {
 }
 
 async function setSettings(settings) {
+  // Ein neu gewähltes Sprachmodell gleich in den Arbeitsspeicher laden, damit das erste Sprechen nicht hängt.
+  if (settings.voice_model && settings.voice_model !== store.settings.voice_model) {
+    api.voicePreload(settings.voice_model).catch(() => {});
+  }
   store.settings = settings;
   applySettings(settings);
   await save();
+}
+
+// Kein brauchbares Sprachmodell gewählt: in der Verwaltung den Bereich „Spracheingabe“ öffnen, mit dem Grund.
+// `reset` verwirft die Auswahl, weil das gewählte Modell fehlt oder beschädigt ist.
+function voiceSetup(hint, reset) {
+  if (reset) setSettings({ ...store.settings, voice_model: '' });
+  openSettings(() => store.settings, store.hosts, setSettings, 'voice', hint);
 }
 
 // ---------- Reiter ----------
@@ -121,6 +134,7 @@ function setStatus(tab, text, state) {
   label.classList.toggle('red', dead);
   tab.button.classList.toggle('off', dead);
   tab.pane.querySelector('.reconnect').hidden = !dead;
+  tab.pane.querySelector('.mic').disabled = state !== 'g';
   refreshHosts();
 }
 
@@ -129,12 +143,14 @@ function markClosed(tab, text = 'Verbindung getrennt') {
   tab.id = null;
   tab.ping = undefined;
   tab.connecting = false;
+  tab.voice.stop();
   setStatus(tab, text, 'r');
   tab.terminal.term.write(`\r\n\x1b[90m[${text}. Enter verbindet neu.]\x1b[0m\r\n`);
 }
 
 function closeTab(tab) {
   tabs.delete(tab);
+  tab.voice.stop();
   // Laufende Uploads abbrechen. Getrennt wird erst danach, damit der Server die halben Dateien noch löschen kann.
   const { id } = tab;
   tab.uploads.close().then(() => id && api.sshDisconnect(id));
@@ -159,6 +175,7 @@ function openTab(host) {
         <button type="button" data-view="files" aria-pressed="false">Dateien</button>
       </div>
       <div class="stat" role="status"><span class="dot"></span><span class="stat-text n"></span></div>
+      <button type="button" class="ib mic" aria-pressed="false" aria-label="Spracheingabe" title="Spracheingabe (Strg + Umschalt + M)" disabled>${icon('mic')}</button>
       <button type="button" class="btn sm reconnect" hidden>Neu verbinden</button>
     </div>
     <div class="pane-body"><div class="term-view"></div><div class="files" hidden></div></div>`;
@@ -176,6 +193,16 @@ function openTab(host) {
     getId: () => tab.id,
     getDir: () => store.settings.paste_dir,
     onPath: (word) => term.paste(`${word} `),
+  });
+  // Spracheingabe: der erkannte Text geht den Einfüge-Weg an die Schreibmarke, ohne Enter.
+  tab.voice = createVoice(pane.querySelector('.mic'), {
+    getModel: () => store.settings.voice_model,
+    onText: (text) => tab.id && term.paste(text),
+    onSetup: voiceSetup,
+  });
+  pane.querySelector('.mic').addEventListener('click', () => {
+    tab.voice.toggle();
+    term.focus();
   });
   // Eingaben nacheinander schicken: gleichzeitige Aufrufe könnten sich sonst überholen.
   term.onData((data) => {
@@ -382,9 +409,17 @@ window.addEventListener('keydown', (e) => {
   const current = list.findIndex((t) => !t.pane.hidden);
   selectTab(list[(current + (e.shiftKey ? -1 : 1) + list.length) % list.length]);
 }, true);
+// Strg + Umschalt + M startet und beendet die Spracheingabe im sichtbaren Reiter.
+window.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || !e.shiftKey || e.key.toLowerCase() !== 'm' || document.querySelector('dialog')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const tab = activeTab();
+  if (tab?.id && !e.repeat) tab.voice.toggle();
+}, true);
 const commands = {
   'host-add': () => edit(null),
-  settings: () => openSettings(store.settings, store.hosts, setSettings),
+  settings: () => openSettings(() => store.settings, store.hosts, setSettings),
 };
 for (const button of document.querySelectorAll('[data-do]')) button.addEventListener('click', commands[button.dataset.do]);
 
@@ -404,3 +439,11 @@ refreshHosts();
 setInterval(() => {
   for (const tab of tabs) if (tab.id) measure(tab);
 }, 5000);
+
+// Updates: vor dem Installieren nachfragen, wenn dabei Verbindungen getrennt würden.
+watchUpdates(async () => {
+  const open = [...tabs].filter((t) => t.id).length;
+  return !open || ask('Update installieren?',
+    `Hostess wird für das Update neu gestartet, ${open === 1 ? '1 offene Verbindung wird' : `${open} offene Verbindungen werden`} getrennt.`,
+    'Installieren');
+});

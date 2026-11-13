@@ -6,6 +6,7 @@ pub mod paste;
 pub mod sftp;
 pub mod ssh;
 pub mod store;
+pub mod voice;
 
 use tauri::Manager;
 
@@ -13,6 +14,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // HOSTESS_DATA_DIR lenkt den Datenordner um (für Tests, damit echte Hosts unberührt bleiben).
             let dir = match std::env::var_os("HOSTESS_DATA_DIR") {
@@ -55,6 +57,12 @@ pub fn run() {
             commands::paste_file,
             commands::paste_image,
             commands::transfer_cancel,
+            commands::voice_models,
+            commands::voice_download,
+            commands::voice_cancel,
+            commands::voice_delete,
+            commands::voice_preload,
+            commands::voice_transcribe,
         ])
         .run(tauri::generate_context!())
         .expect("Fenster konnte nicht starten");

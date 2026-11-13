@@ -62,6 +62,8 @@ button > * { pointer-events: none; }
 .host .edit { opacity: 0; }
 .host:hover .edit, .host .edit:focus-visible { opacity: 1; }
 .sidefoot { padding: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.update { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px; font-size: 12px; color: var(--mute); }
+.update span { flex: 1; min-width: 0; }
 .navbtn { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border: 0; background: none; border-radius: 8px; text-align: left; color: var(--mute); transition: background .12s, color .12s; }
 .navbtn:hover, .navbtn.on { background: var(--raise); color: var(--text); }
 .none { padding: 24px 16px; color: var(--mute); font-size: 13px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -132,6 +134,9 @@ kbd { font: 12px var(--mono); color: var(--text); padding: 2px 8px; border: 1px 
 .ib { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; border-radius: 6px; color: var(--mute); transition: background .12s, color .12s; }
 .ib:hover { background: var(--hover); color: var(--text); }
 .ib.del:hover { color: var(--red); }
+.ib.mic.rec { color: var(--red); background: rgba(248, 113, 113, .15); }
+.ib.mic.busy { color: var(--amber); cursor: progress; }
+.ib:disabled { opacity: .4; pointer-events: none; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field > span:first-child, .flabel { font-size: 12px; color: var(--mute); }
 .in { height: 34px; width: 100%; padding: 0 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--text); outline: 0; }
@@ -235,6 +240,14 @@ dialog.wide > form { flex-direction: row; gap: 0; height: 100%; }
 .card .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .card .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card strong { font-weight: 600; }
+.vrange { display: flex; flex-direction: column; gap: 6px; }
+.vrange input { width: 100%; margin: 0; accent-color: var(--green); }
+.vticks { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--mute); }
+.vrow { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mute); }
+.vrow > :first-child { width: 90px; }
+.pips { letter-spacing: 3px; color: var(--green); }
+.vacts { display: flex; align-items: center; gap: 8px; }
+.vacts .bar { flex: 1; }
 .badge { font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--mute); }
 .locked { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--mute); }
 .locked .i { width: 14px; height: 14px; }

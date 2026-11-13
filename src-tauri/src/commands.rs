@@ -1,7 +1,7 @@
 //! Einzige Stelle, die Tauri kennt: nimmt Aufrufe der Oberfläche an und reicht sie an die Module weiter.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -12,7 +12,7 @@ use std::{
 
 use russh_sftp::client::SftpSession;
 use tauri::{
-    ipc::{Channel, InvokeResponseBody},
+    ipc::{Channel, InvokeBody, InvokeResponseBody, Request},
     AppHandle, State,
 };
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -22,6 +22,7 @@ use crate::{
     hosts, keys, known_hosts, paste, sftp,
     ssh::{self, ConnectError},
     store::{self, Host, Store},
+    voice,
 };
 
 struct Conn {
@@ -46,11 +47,26 @@ pub struct App {
     secrets: Mutex<HashMap<String, String>>,
     /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
     transfers: Mutex<HashMap<u32, Arc<AtomicBool>>>,
+    /// Das Sprachmodell im Arbeitsspeicher samt seiner id, damit es nicht bei jeder Aufnahme neu geladen wird.
+    voice: Arc<Mutex<Option<(&'static str, voice::WhisperContext)>>>,
+    /// Kennzeichen „abbrechen“ je laufendem Modell-Download.
+    downloads: Mutex<HashMap<&'static str, Arc<AtomicBool>>>,
+    /// Modelle, die sich trotz richtiger Größe nicht laden ließen.
+    broken: Arc<Mutex<HashSet<&'static str>>>,
 }
 
 impl App {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, conns: Arc::default(), next_id: AtomicU32::new(1), secrets: Mutex::default(), transfers: Mutex::default() }
+        Self {
+            dir,
+            conns: Arc::default(),
+            next_id: AtomicU32::new(1),
+            secrets: Mutex::default(),
+            transfers: Mutex::default(),
+            voice: Arc::default(),
+            downloads: Mutex::default(),
+            broken: Arc::default(),
+        }
     }
 
     fn conn(&self, id: u32) -> Result<Arc<Conn>, String> {
@@ -69,6 +85,11 @@ impl App {
 
     fn store(&self) -> PathBuf {
         self.dir.join("store.json")
+    }
+
+    /// Ordner der heruntergeladenen Sprachmodelle.
+    fn models(&self) -> PathBuf {
+        self.dir.join("models")
     }
 }
 
@@ -395,4 +416,112 @@ pub async fn paste_image(
 #[tauri::command]
 pub fn transfer_cancel(app: State<'_, App>, transfer: u32) {
     app.transfer(transfer).store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn voice_models(app: State<'_, App>) -> Vec<voice::ModelInfo> {
+    let mut models = voice::list(&app.models());
+    let (downloads, broken) = (app.downloads.lock().unwrap(), app.broken.lock().unwrap());
+    for model in &mut models {
+        model.downloading = downloads.contains_key(model.id);
+        model.installed &= !broken.contains(model.id);
+    }
+    models
+}
+
+/// Lädt ein Sprachmodell herunter oder setzt den angefangenen Download fort. Liefert `false`, wenn mit
+/// `voice_cancel` abgebrochen wurde. Den Stand zeigt `voice_models`.
+#[tauri::command]
+pub async fn voice_download(app: State<'_, App>, id: String) -> Result<bool, String> {
+    let model = voice::find(&id)?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let mut downloads = app.downloads.lock().unwrap();
+        if downloads.contains_key(model.id) {
+            return Err("Dieses Modell wird schon heruntergeladen.".into());
+        }
+        downloads.insert(model.id, cancel.clone());
+    }
+    let dir = app.models();
+    let result = tauri::async_runtime::spawn_blocking(move || voice::download(&dir, model, &cancel)).await;
+    app.downloads.lock().unwrap().remove(model.id);
+    let done = result.map_err(text)??;
+    if done {
+        app.broken.lock().unwrap().remove(model.id);
+    }
+    Ok(done)
+}
+
+#[tauri::command]
+pub fn voice_cancel(app: State<'_, App>, id: String) {
+    if let Some(cancel) = app.downloads.lock().unwrap().get(id.as_str()) {
+        cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Löscht das Modell von der Platte und aus dem Arbeitsspeicher, samt einem angefangenen Download.
+#[tauri::command]
+pub fn voice_delete(app: State<'_, App>, id: String) -> Result<(), String> {
+    let model = voice::find(&id)?;
+    if app.downloads.lock().unwrap().contains_key(model.id) {
+        return Err("Der Download läuft noch. Brich ihn zuerst ab.".into());
+    }
+    // Der Platz ist belegt, solange eine Erkennung läuft.
+    let mut loaded = app.voice.try_lock().map_err(|_| "Das Modell wird gerade benutzt.")?;
+    if loaded.as_ref().is_some_and(|(loaded, _)| *loaded == model.id) {
+        *loaded = None;
+    }
+    voice::delete(&app.models(), model)?;
+    app.broken.lock().unwrap().remove(model.id);
+    Ok(())
+}
+
+/// Führt `job` mit dem Modell `id` aus und lädt es vorher, wenn ein anderes oder keins im Arbeitsspeicher liegt.
+/// Dort liegt immer nur ein Modell. Eine laufende Erkennung wird mit ihrem Modell fertig, erst dann wird getauscht.
+async fn with_voice<T: Send + 'static>(
+    app: &App,
+    id: &str,
+    job: impl FnOnce(&voice::WhisperContext) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let model = voice::find(id)?;
+    let (dir, slot, broken) = (app.models(), app.voice.clone(), app.broken.clone());
+    // Laden und Erkennen dauern Sekunden, also nicht auf dem Netzwerk-Thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut loaded = slot.lock().unwrap();
+        if !loaded.as_ref().is_some_and(|(loaded, _)| *loaded == model.id) {
+            *loaded = None;
+            if !voice::installed(&dir, model) {
+                return Err("Das gewählte Sprachmodell ist nicht installiert.".to_string());
+            }
+            match voice::load(&dir.join(model.file)) {
+                Ok(context) => *loaded = Some((model.id, context)),
+                Err(e) => {
+                    // Richtige Größe, aber nicht ladbar: gilt als nicht installiert, bis es neu geladen oder gelöscht ist.
+                    broken.lock().unwrap().insert(model.id);
+                    return Err(e);
+                }
+            }
+        }
+        job(&loaded.as_ref().unwrap().1)
+    })
+    .await
+    .map_err(text)?
+}
+
+/// Lädt das Modell schon in den Arbeitsspeicher, damit die erste Erkennung nicht darauf warten muss.
+#[tauri::command]
+pub async fn voice_preload(app: State<'_, App>, id: String) -> Result<(), String> {
+    with_voice(&app, &id, |_| Ok(())).await
+}
+
+/// Wandelt eine Aufnahme in Text. Der Körper der Anfrage sind die rohen Samples (Float32, Little Endian,
+/// 16 kHz, mono), die id des Modells steht im Kopf `model`. Leerer Text heißt: nichts Gesprochenes erkannt.
+#[tauri::command]
+pub async fn voice_transcribe(app: State<'_, App>, request: Request<'_>) -> Result<String, String> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Die Aufnahme kam nicht an.".into());
+    };
+    let id = request.headers().get("model").and_then(|id| id.to_str().ok()).unwrap_or_default();
+    let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    with_voice(&app, id, move |context| voice::transcribe(context, &samples)).await
 }

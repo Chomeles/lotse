@@ -22,8 +22,15 @@
       "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://sharko-it.de/hostess/dl/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVEOEUxQjJGNkNGOTdFOTAKUldTUWZ2bHNMeHVPWGZGRHZlTzlFdFNhbDVhUXRGbmwrT3kvVVVVOUpEVDdGZE01NmE4ZUxtSGsK"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"]
   }
