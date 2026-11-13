@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.10.1 – 2026-11-13
+- Dateimanager wie im Explorer: ein Klick wählt aus, ein Doppelklick (oder Enter) öffnet den Ordner bzw. lädt die Datei herunter. Rücktaste geht einen Ordner nach oben
+
 ## 0.10.0 – 2026-11-13
 - Dateimanager: Mehrfachauswahl wie im Explorer. Strg + Klick nimmt einen Eintrag dazu oder heraus, Umschalt + Klick wählt den Bereich, Strg + A alles, Esc hebt auf. Die Statuszeile zeigt Anzahl und Größe der Auswahl mit „Herunterladen“ und „Löschen“; dasselbe per Rechtsklick und mit Entf. Mehrere Dateien landen in einem Ordner, den man einmal wählt; gelöscht wird nach einer Rückfrage, die die Einträge nennt
 - Verwaltung, Spracheingabe: die Sprache lässt sich fest wählen (Deutsch, English und 12 weitere) statt „Automatisch erkennen“. Fest gewählt ist die Erkennung schneller und rutscht bei kurzen Sätzen nicht in eine andere Sprache

@@ -187,11 +187,16 @@ export function createFiles(el, getId) {
           <button type="button" class="ib" data-act="rename" aria-label="${name} umbenennen" title="Umbenennen">${icon('edit')}</button>
           <button type="button" class="ib del" data-act="delete" aria-label="${name} löschen" title="Löschen">${icon('trash')}</button>
         </span>`;
-      // Mit Strg oder Umschalt und neben dem Namen wird ausgewählt; ein einfacher Klick auf den Namen öffnet.
+      // Wie im Explorer: ein Klick wählt aus (mit Strg oder Umschalt mehrere), ein Doppelklick öffnet.
+      // Die Symbole rechts wirken sofort.
       row.addEventListener('click', (e) => {
         const act = e.target.dataset.act;
-        if (e.ctrlKey || e.shiftKey || !act) pick(i, e);
-        else run(act, entry);
+        if (act && act !== 'open') return run(act, entry);
+        pick(i, e);
+        list.focus();
+      });
+      row.addEventListener('dblclick', (e) => {
+        if (!e.ctrlKey && !e.shiftKey && !e.target.closest('.acts')) run('open', entry);
       });
       // Umschalt + Klick würde sonst Text in der Liste markieren.
       row.addEventListener('mousedown', (e) => e.shiftKey && e.preventDefault());
@@ -352,7 +357,8 @@ export function createFiles(el, getId) {
 
   el.querySelector('.fbar').addEventListener('click', (e) => run(e.target.dataset.act));
   status.addEventListener('click', (e) => run(e.target.dataset.act));
-  // Tastatur in der Liste: Strg + A wählt alles, Esc hebt die Auswahl auf, Entf löscht die Auswahl.
+  // Tastatur in der Liste: Strg + A wählt alles, Esc hebt die Auswahl auf, Entf löscht sie, Enter öffnet den
+  // einen gewählten Eintrag, Rücktaste geht einen Ordner nach oben.
   list.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key.toLowerCase() === 'a') {
       e.preventDefault();
@@ -363,6 +369,10 @@ export function createFiles(el, getId) {
       mark();
     } else if (e.key === 'Delete' && selected.size) {
       run('deleteSel');
+    } else if (e.key === 'Enter' && selected.size === 1) {
+      run('open', chosen()[0]);
+    } else if (e.key === 'Backspace') {
+      run('up');
     }
   });
   pathInput.addEventListener('keydown', (e) => {
