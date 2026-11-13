@@ -59,6 +59,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
             <div class="vticks" aria-hidden="true"></div>
           </div>
           <div class="card"></div>
+          <span class="hint device" role="status"></span>
           <h4>Mikrofon testen</h4>
           <div class="card mictest">
             <div class="info">
@@ -182,7 +183,8 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
   const voice = section('voice');
   const range = voice.querySelector('input');
   const card = voice.querySelector('.card');
-  const recommended = navigator.hardwareConcurrency >= 8 ? 'small' : 'base';
+  // Mit eigener Grafikkarte sind auch die großen Modelle schnell. Bis die Antwort da ist, gilt der Prozessor.
+  let recommended = navigator.hardwareConcurrency >= 8 ? 'small' : 'base';
   let models = null;
   let polling = false;
 
@@ -234,6 +236,11 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
         const first = !models;
         models = await api.voiceModels();
         if (first) {
+          const gpu = await api.voiceGpu().catch(() => null);
+          if (gpu?.discrete) recommended = 'turbo';
+          voice.querySelector('.device').textContent = gpu
+            ? `Gerechnet wird auf der Grafikkarte: ${gpu.name}`
+            : 'Gerechnet wird auf dem Prozessor: keine passende Grafikkarte gefunden.';
           // Der Regler steht auf dem gewählten Modell, sonst auf dem empfohlenen.
           const chosen = models.findIndex((m) => m.id === getSettings().voice_model);
           range.value = chosen >= 0 ? chosen : models.findIndex((m) => m.id === recommended);

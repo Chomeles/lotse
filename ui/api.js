@@ -56,6 +56,8 @@ export const api = {
   // Spracheingabe. Liefert [{ id, name, note, bytes, installed, loaded, downloading }], vom kleinsten Modell zum
   // größten. `loaded` sind die schon geladenen Bytes eines angefangenen Downloads.
   voiceModels: () => invoke('voice_models'),
+  // { name, discrete } der Grafikkarte, auf der die Erkennung rechnet, oder null (dann rechnet der Prozessor).
+  voiceGpu: () => invoke('voice_gpu'),
   // Lädt herunter oder setzt fort. Liefert true, wenn das Modell fertig ist, false nach `voiceCancel`.
   voiceDownload: (id) => invoke('voice_download', { id }),
   voiceCancel: (id) => invoke('voice_cancel', { id }),

@@ -4,6 +4,10 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.7.0 – 2026-11-13
+- Die Spracherkennung rechnet jetzt auf der Grafikkarte (Vulkan: AMD, NVIDIA, Intel). Gemessen auf einer Radeon RX 7900 XT braucht ein Satz von 5 Sekunden mit „Klein“ 0,1 s, „Mittel“ 0,2 s, „Groß“ 0,8 s, „Maximal“ 0,3 s. Ohne passende Grafikkarte rechnet wie bisher der Prozessor; zu installieren ist nichts
+- Verwaltung, Spracheingabe: zeigt, ob Grafikkarte oder Prozessor rechnet. Mit eigener Grafikkarte wird „Maximal“ empfohlen
+
 ## 0.6.3 – 2026-11-13
 - Behoben: Die Spracherkennung war um ein Vielfaches zu langsam (ein Satz mit dem Modell „Groß“ über zwei Minuten), weil die Whisper-Bibliothek ohne Optimierung übersetzt wurde. Jetzt braucht „Klein“ etwa 1 Sekunde, „Mittel“ etwa 4, „Groß“ etwa 20 (gemessen auf einem Ryzen 7 mit 8 Kernen)
 - Verwaltung, Spracheingabe: „Mikrofon testen“ zeigt, welches Mikrofon Hostess benutzt, den Pegel in Echtzeit und ob du gut zu verstehen bist

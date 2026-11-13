@@ -36,13 +36,16 @@ neueren Version und installiert sie nach einem Klick. Der Installer muss mit dem
 dessen öffentlicher Teil in `tauri.conf.json` steht. Der private Schlüssel liegt außerhalb des Repos.
 
 1. Nummer in `src-tauri/Cargo.toml` erhöhen.
-2. Signiert bauen (PowerShell, in `src-tauri`):
+2. Signiert bauen (PowerShell, in `src-tauri`). Für die Spracherkennung auf der Grafikkarte braucht der Bau das
+   Vulkan SDK (`winget install KhronosGroup.VulkanSDK`, setzt `VULKAN_SDK`) und Ninja. `build.cmd` richtet die
+   MSVC-Umgebung ein, nimmt Ninja und den kurzen Bauordner `C:\ht`: mit MSBuild oder im Projektordner werden die
+   Pfade der Vulkan-Shader länger als die 260 Zeichen, die Windows erlaubt.
    ```
    $env:TAURI_SIGNING_PRIVATE_KEY = "<Pfad zur Schlüsseldatei>"
    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-   cargo tauri build
+   .\build.cmd cargo tauri build
    ```
-3. Unter `target/release/bundle/nsis` liegen danach `Hostess_<Version>_x64-setup.exe` und daneben
+3. Unter `C:\ht\release\bundle\nsis` liegen danach `Hostess_<Version>_x64-setup.exe` und daneben
    `Hostess_<Version>_x64-setup.exe.sig`.
 4. Die `-setup.exe` auf den Server legen und zuletzt die `latest.json` ersetzen:
    ```json

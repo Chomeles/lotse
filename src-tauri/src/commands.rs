@@ -507,6 +507,13 @@ async fn with_voice<T: Send + 'static>(
     .map_err(text)?
 }
 
+/// Die Grafikkarte, auf der die Spracherkennung rechnet, oder nichts, wenn der Prozessor rechnet.
+#[tauri::command]
+pub async fn voice_gpu() -> Option<voice::Gpu> {
+    // Die erste Abfrage startet Vulkan und kann kurz dauern.
+    tauri::async_runtime::spawn_blocking(voice::gpu).await.ok().flatten()
+}
+
 /// Lädt das Modell schon in den Arbeitsspeicher, damit die erste Erkennung nicht darauf warten muss.
 #[tauri::command]
 pub async fn voice_preload(app: State<'_, App>, id: String) -> Result<(), String> {

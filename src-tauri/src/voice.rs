@@ -44,14 +44,14 @@ pub const MODELS: [Model; 4] = [
     Model {
         id: "turbo-q5",
         name: "Groß",
-        note: "Sehr genau, aber langsam: auch ein schneller Rechner braucht viele Sekunden pro Satz",
+        note: "Sehr genau. Mit Grafikkarte unter einer Sekunde pro Satz, ohne sie viele Sekunden",
         file: "ggml-large-v3-turbo-q5_0.bin",
         bytes: 574_041_195,
     },
     Model {
         id: "turbo",
         name: "Maximal",
-        note: "Beste Erkennung, sehr langsam: nur für Geduldige",
+        note: "Beste Erkennung. Nur mit Grafikkarte zu empfehlen, ohne sie sehr langsam",
         file: "ggml-large-v3-turbo.bin",
         bytes: 1_624_555_275,
     },
@@ -181,10 +181,45 @@ pub fn delete(dir: &Path, model: &Model) -> Result<(), String> {
     Ok(())
 }
 
-/// Lädt ein Modell in den Arbeitsspeicher. Dauert je nach Größe einige Sekunden.
+/// Die Grafikkarte, auf der Whisper rechnet (über Vulkan). `None`: keine brauchbare gefunden, dann rechnet
+/// der Prozessor.
+#[derive(Debug, Serialize)]
+pub struct Gpu {
+    pub name: String,
+    /// Eigene Grafikkarte, nicht die im Prozessor eingebaute: nur die ist für die großen Modelle schnell genug.
+    pub discrete: bool,
+}
+
+pub fn gpu() -> Option<Gpu> {
+    use whisper_rs::whisper_rs_sys as sys;
+    [
+        (sys::ggml_backend_dev_type_GGML_BACKEND_DEVICE_TYPE_GPU, true),
+        (sys::ggml_backend_dev_type_GGML_BACKEND_DEVICE_TYPE_IGPU, false),
+    ]
+    .into_iter()
+    .find_map(|(kind, discrete)| {
+        // Sicher: ggml liefert einen Zeiger auf ein Gerät, das bis zum Programmende lebt, oder null.
+        let name = unsafe {
+            let device = sys::ggml_backend_dev_by_type(kind);
+            if device.is_null() {
+                return None;
+            }
+            std::ffi::CStr::from_ptr(sys::ggml_backend_dev_description(device)).to_string_lossy().into_owned()
+        };
+        Some(Gpu { name, discrete })
+    })
+}
+
+/// Lädt ein Modell in den Arbeitsspeicher. Dauert je nach Größe einige Sekunden. Gerechnet wird auf der
+/// Grafikkarte; gibt es keine oder scheitert das Laden dort, auf dem Prozessor.
+// shortcut: Scheitert erst die Erkennung auf der Grafikkarte, gibt es keinen zweiten Versuch auf dem Prozessor.
 pub fn load(path: &Path) -> Result<WhisperContext, String> {
-    WhisperContext::new_with_params(path, WhisperContextParameters::default())
-        .map_err(|e| format!("Das Sprachmodell ließ sich nicht laden: {e}"))
+    let open = |gpu| {
+        let mut params = WhisperContextParameters::default();
+        params.use_gpu(gpu);
+        WhisperContext::new_with_params(path, params)
+    };
+    open(true).or_else(|_| open(false)).map_err(|e| format!("Das Sprachmodell ließ sich nicht laden: {e}"))
 }
 
 /// Whisper rechnet auf echten Kernen am schnellsten: mit allen logischen Kernen (Hyperthreading) wird es

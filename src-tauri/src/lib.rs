@@ -58,6 +58,7 @@ pub fn run() {
             commands::paste_image,
             commands::transfer_cancel,
             commands::voice_models,
+            commands::voice_gpu,
             commands::voice_download,
             commands::voice_cancel,
             commands::voice_delete,

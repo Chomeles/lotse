@@ -1,6 +1,6 @@
 [package]
 name = "hostess"
-version = "0.6.3"
+version = "0.7.0"
 edition = "2021"
 
 [lib]
@@ -27,7 +27,7 @@ keyring = { version = "3", features = ["windows-native"] }
 # Schon im Baum (über tauri): kodiert das Bild aus der Zwischenablage.
 png = "0.18"
 # Spracheingabe: Whisper läuft auf dem eigenen Rechner (nur CPU), ureq lädt das Modell.
-whisper-rs = "0.16"
+whisper-rs = { version = "0.16", features = ["vulkan", "raw-api"] }
 ureq = "3"
 
 [dev-dependencies]
