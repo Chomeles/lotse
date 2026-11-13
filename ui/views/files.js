@@ -104,6 +104,10 @@ export function createFiles(el, getId) {
   // Mehrfachauswahl wie im Explorer: Namen der markierten Einträge und die Zeile, von der Umschalt aus zählt.
   const selected = new Set();
   let anchor = null;
+  // Die zuletzt gewählte Zeile: von ihr aus gehen die Pfeiltasten weiter.
+  let cursor = null;
+  // Gerade wurde ein Auswahlrahmen gezogen: der Klick am Ende soll die Auswahl nicht ersetzen.
+  let dragged = false;
   const chosen = () => entries.filter((e) => selected.has(e.name));
 
   // Zeigt die Auswahl in der Liste und in der Statuszeile.
@@ -129,6 +133,8 @@ export function createFiles(el, getId) {
       selected.add(entries[i].name);
       anchor = i;
     }
+    cursor = i;
+    list.children[i]?.scrollIntoView({ block: 'nearest' });
     mark();
   };
 
@@ -192,6 +198,7 @@ export function createFiles(el, getId) {
       row.addEventListener('click', (e) => {
         const act = e.target.dataset.act;
         if (act && act !== 'open') return run(act, entry);
+        if (dragged) return;
         pick(i, e);
         list.focus();
       });
@@ -226,7 +233,7 @@ export function createFiles(el, getId) {
     entries = listing.entries;
     // Die Auswahl gilt nur für das, was gerade zu sehen ist.
     selected.clear();
-    anchor = null;
+    anchor = cursor = null;
     showDisk(listing.disk, listing.mode);
     render();
   }
@@ -357,8 +364,49 @@ export function createFiles(el, getId) {
 
   el.querySelector('.fbar').addEventListener('click', (e) => run(e.target.dataset.act));
   status.addEventListener('click', (e) => run(e.target.dataset.act));
+  // Auswahlrahmen: mit gedrückter Maustaste über die Liste ziehen wählt alle Zeilen, die der Rahmen berührt.
+  // Mit Strg kommt das zur bisherigen Auswahl dazu.
+  list.addEventListener('mousedown', (down) => {
+    if (down.button !== 0 || down.shiftKey || down.target.closest('.acts') || !entries.length) return;
+    const box = list.getBoundingClientRect();
+    const at = (e) => ({ x: e.clientX - box.left + list.scrollLeft, y: e.clientY - box.top + list.scrollTop });
+    const from = at(down);
+    const before = down.ctrlKey ? new Set(selected) : new Set();
+    let frame = null;
+    const move = (e) => {
+      const to = at(e);
+      if (!frame) {
+        if (Math.abs(to.x - from.x) + Math.abs(to.y - from.y) < 6) return;
+        frame = document.createElement('div');
+        frame.className = 'band';
+        list.append(frame);
+        dragged = true;
+      }
+      const [top, bottom] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
+      Object.assign(frame.style, { left: `${Math.min(from.x, to.x)}px`, top: `${top}px`, width: `${Math.abs(to.x - from.x)}px`, height: `${bottom - top}px` });
+      selected.clear();
+      for (const name of before) selected.add(name);
+      entries.forEach((entry, i) => {
+        const row = list.children[i];
+        if (row.offsetTop < bottom && row.offsetTop + row.offsetHeight > top) {
+          selected.add(entry.name);
+          anchor = cursor = i;
+        }
+      });
+      mark();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      frame?.remove();
+      // Der Klick, der auf das Loslassen folgt, kommt noch vor dieser Zeitschaltung.
+      setTimeout(() => { dragged = false; });
+      list.focus();
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up, { once: true });
+  });
   // Tastatur in der Liste: Strg + A wählt alles, Esc hebt die Auswahl auf, Entf löscht sie, Enter öffnet den
-  // einen gewählten Eintrag, Rücktaste geht einen Ordner nach oben.
+  // einen gewählten Eintrag, F2 benennt ihn um, Rücktaste geht einen Ordner nach oben.
   list.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key.toLowerCase() === 'a') {
       e.preventDefault();
@@ -373,6 +421,14 @@ export function createFiles(el, getId) {
       run('open', chosen()[0]);
     } else if (e.key === 'Backspace') {
       run('up');
+    } else if (e.key === 'F2' && selected.size === 1) {
+      run('rename', chosen()[0]);
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) && entries.length) {
+      // Pfeile bewegen die Auswahl, mit Umschalt erweitern sie sie ab der zuerst gewählten Zeile.
+      e.preventDefault();
+      const last = entries.length - 1;
+      const to = { ArrowDown: cursor === null ? 0 : Math.min(last, cursor + 1), ArrowUp: cursor === null ? last : Math.max(0, cursor - 1), Home: 0, End: last }[e.key];
+      pick(to, { shiftKey: e.shiftKey, ctrlKey: false });
     }
   });
   pathInput.addEventListener('keydown', (e) => {
