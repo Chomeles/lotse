@@ -24,7 +24,7 @@ export const api = {
     channel.onmessage = (msg) => {
       if (msg instanceof ArrayBuffer) onData(new Uint8Array(msg));
       else if (Array.isArray(msg)) onData(Uint8Array.from(msg));
-      else if (msg?.closed) onClose();
+      else if (msg?.closed) onClose(msg.why);
     };
     return invoke('ssh_connect', { host, secret, remember, trust, cols, rows, onData: channel });
   },

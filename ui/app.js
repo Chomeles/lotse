@@ -138,14 +138,17 @@ function setStatus(tab, text, state) {
   refreshHosts();
 }
 
-function markClosed(tab, text = 'Verbindung getrennt') {
+// `why` ist der Grund vom Server oder von der Leitung; er steht mit Uhrzeit im Terminal und als Tooltip am Status.
+function markClosed(tab, text = 'Verbindung getrennt', why = '') {
   if (!tabs.has(tab)) return;
   tab.id = null;
   tab.ping = undefined;
   tab.connecting = false;
   tab.voice.stop();
   setStatus(tab, text, 'r');
-  tab.terminal.term.write(`\r\n\x1b[90m[${text}. Enter verbindet neu.]\x1b[0m\r\n`);
+  tab.pane.querySelector('.stat').title = why;
+  const line = why ? `${new Date().toLocaleTimeString('de-DE')} ${text}: ${why}` : text;
+  tab.terminal.term.write(`\r\n\x1b[90m[${line}. Enter verbindet neu.]\x1b[0m\r\n`);
 }
 
 function closeTab(tab) {
@@ -315,6 +318,7 @@ async function attach(tab) {
   let secret = null;
   let remember = false;
   let trust = null;
+  tab.pane.querySelector('.stat').title = '';
   setStatus(tab, `Verbinde mit ${host.address} …`, 'a');
   for (;;) {
     try {
@@ -322,7 +326,7 @@ async function attach(tab) {
         host,
         { secret, remember, trust, cols: term.cols, rows: term.rows },
         (bytes) => term.write(bytes),
-        () => markClosed(tab),
+        (why) => markClosed(tab, undefined, why ?? ''),
       );
       tab.connecting = false;
       if (!tabs.has(tab)) api.sshDisconnect(tab.id);
@@ -359,6 +363,9 @@ async function connect(host) {
     host = await edit(host, 'Zum Verbinden fehlt noch der Benutzer.');
     if (!host) return;
   }
+  // Baut ein Reiter die Verbindung zu diesem Host gerade auf, zeigt ein weiterer Klick ihn, statt noch eine zu öffnen.
+  const busy = [...tabs].find((t) => t.host === host && t.connecting);
+  if (busy) return selectTab(busy);
   attach(openTab(host));
 }
 

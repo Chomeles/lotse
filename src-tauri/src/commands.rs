@@ -155,7 +155,8 @@ pub async fn ssh_connect(
             let _ = entry.delete_credential();
         }
     };
-    let handle = match ssh::connect(&host, secret.as_deref(), trust, app.known_hosts()).await {
+    let why = ssh::Why::default();
+    let handle = match ssh::connect_why(&host, secret.as_deref(), trust, app.known_hosts(), why.clone()).await {
         Ok(handle) => handle,
         // Das gemerkte Geheimnis stimmt nicht mehr: verwerfen und neu fragen, ohne „war falsch“.
         Err(ConnectError::NeedPassphrase { .. }) if !typed => {
@@ -185,12 +186,14 @@ pub async fn ssh_connect(
     app.conns.lock().unwrap().insert(id, Arc::new(Conn { handle, shell, sftp: OnceCell::new() }));
     let conns = app.conns.clone();
     tauri::async_runtime::spawn(async move {
-        ssh::pump(reader, |data| {
+        let ended = ssh::pump(reader, |data| {
             let _ = on_data.send(InvokeResponseBody::Raw(data.to_vec()));
         })
         .await;
         conns.lock().unwrap().remove(&id);
-        let _ = on_data.send(InvokeResponseBody::Json(r#"{"closed":true}"#.into()));
+        // Der Grund steht schon da: russh meldet ihn, bevor es den Kanal schließt.
+        let why = if ended { Some("Die Sitzung auf dem Server wurde beendet".into()) } else { why.lock().unwrap().take() };
+        let _ = on_data.send(InvokeResponseBody::Json(serde_json::json!({ "closed": true, "why": why }).to_string()));
     });
     Ok(id)
 }

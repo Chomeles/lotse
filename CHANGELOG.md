@@ -4,6 +4,10 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.12.0 – 2026-11-13
+- Reißt eine Verbindung ab, steht jetzt im Terminal mit Uhrzeit, warum: Der Server hat sie beendet, die Leitung ohne Meldung geschlossen, antwortet seit zwei Minuten nicht mehr, oder die Sitzung wurde auf dem Server beendet. Derselbe Grund steht als Tooltip am roten Status
+- Mehrere Klicks auf einen Host, während die Verbindung noch aufgebaut wird, öffnen keinen weiteren Reiter mehr, sondern zeigen den, der gerade verbindet
+
 ## 0.11.2 – 2026-11-13
 - Verwaltung, Spracheingabe: Die Sprachauswahl steht jetzt oben vor den Modellen, ist breit genug für ihren Text und linksbündig im dunklen Stil
 

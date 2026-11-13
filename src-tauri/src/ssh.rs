@@ -40,10 +40,40 @@ pub struct Client {
     port: u16,
     trust: Option<String>,
     issue: Arc<Mutex<Option<ConnectError>>>,
+    why: Why,
+}
+
+/// Warum eine stehende Verbindung endete, in einem Satz ohne Punkt. Leer, solange sie steht.
+pub type Why = Arc<Mutex<Option<String>>>;
+
+fn why_text(reason: &client::DisconnectReason<russh::Error>) -> String {
+    use client::DisconnectReason::{Error, ReceivedDisconnect};
+    match reason {
+        ReceivedDisconnect(info) if info.message.is_empty() => {
+            format!("Der Server hat die Verbindung beendet ({:?})", info.reason_code)
+        }
+        ReceivedDisconnect(info) => format!("Der Server hat die Verbindung beendet: {}", info.message),
+        // Vier Keepalives im Abstand von 30 Sekunden blieben ohne Antwort.
+        Error(russh::Error::KeepaliveTimeout) => "Der Server antwortet seit zwei Minuten nicht mehr".into(),
+        Error(russh::Error::Disconnect) => "Der Server hat die Leitung ohne Meldung geschlossen".into(),
+        Error(russh::Error::IO(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+            "Der Server hat die Leitung ohne Meldung geschlossen".into()
+        }
+        Error(russh::Error::IO(e)) => format!("Die Leitung ist abgerissen ({e})"),
+        Error(e) => format!("Verbindungsfehler: {e}"),
+    }
 }
 
 impl client::Handler for Client {
     type Error = russh::Error;
+
+    async fn disconnected(&mut self, reason: client::DisconnectReason<Self::Error>) -> Result<(), Self::Error> {
+        *self.why.lock().unwrap() = Some(why_text(&reason));
+        match reason {
+            client::DisconnectReason::ReceivedDisconnect(_) => Ok(()),
+            client::DisconnectReason::Error(e) => Err(e),
+        }
+    }
 
     async fn check_server_key(&mut self, key: &PublicKeyOrCertificate) -> Result<bool, Self::Error> {
         let issue = match key {
@@ -82,6 +112,17 @@ pub async fn connect(
     trust: Option<String>,
     known_hosts: PathBuf,
 ) -> Result<Handle, ConnectError> {
+    connect_why(host, secret, trust, known_hosts, Why::default()).await
+}
+
+/// Wie `connect`; in `why` steht später, warum die Verbindung endete.
+pub async fn connect_why(
+    host: &Host,
+    secret: Option<&str>,
+    trust: Option<String>,
+    known_hosts: PathBuf,
+    why: Why,
+) -> Result<Handle, ConnectError> {
     // Schlüssel zuerst: ohne ihn lohnt sich die Verbindung nicht.
     let key = if host.key_path.is_empty() { None } else { Some(load_key(host, secret)?) };
 
@@ -96,6 +137,7 @@ pub async fn connect(
         port: host.port,
         trust,
         issue: issue.clone(),
+        why,
     };
     let connecting = client::connect(config, (host.address.as_str(), host.port), handler);
     let mut handle = match tokio::time::timeout(Duration::from_secs(15), connecting).await {
@@ -221,15 +263,17 @@ pub async fn open_shell(handle: &Handle, cols: u32, rows: u32) -> Result<(Channe
 }
 
 /// Reicht die Ausgabe der Shell weiter, bis der Kanal oder die Verbindung endet.
-pub async fn pump(mut shell: ChannelReadHalf, mut out: impl FnMut(&[u8])) {
+/// `true`: die Shell hat sich beendet (etwa `exit`). `false`: die Verbindung ist weg.
+pub async fn pump(mut shell: ChannelReadHalf, mut out: impl FnMut(&[u8])) -> bool {
     while let Some(msg) = shell.wait().await {
         match msg {
             ChannelMsg::Data { data } => out(&data),
             ChannelMsg::ExtendedData { data, .. } => out(&data),
-            ChannelMsg::Close => break,
+            ChannelMsg::Close => return true,
             _ => {}
         }
     }
+    false
 }
 
 /// Führt einen Befehl auf dem Server aus. Bei Fehlercode kommt die Ausgabe des Befehls als Fehler zurück.
