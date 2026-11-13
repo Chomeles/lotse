@@ -54,17 +54,17 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
           <h3>Spracheingabe</h3>
           ${hint ? errorHint(hint) : ''}
           <p>Sprechen statt tippen: Das Mikrofon über dem Terminal oder Strg + Umschalt + M nimmt auf, der erkannte Text landet an der Schreibmarke. Die Erkennung läuft auf deinem Rechner, es wird nichts hochgeladen. Das Modell wird einmalig von huggingface.co geladen und bleibt, bis du es löschst.</p>
+          <label class="set lang"><span><span>Sprache</span><span class="hint">Fest gewählt ist die Erkennung schneller und rutscht nicht in eine andere Sprache</span></span>
+            <select class="in" name="voice_lang">
+              ${[['', 'Automatisch erkennen'], ['de', 'Deutsch'], ['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'], ['nl', 'Nederlands'], ['pl', 'Polski'], ['pt', 'Português'], ['tr', 'Türkçe'], ['ru', 'Русский'], ['uk', 'Українська'], ['ar', 'العربية'], ['ja', '日本語'], ['zh', '中文']]
+                .map(([id, name]) => `<option value="${id}"${id === (settings.voice_lang ?? '') ? ' selected' : ''}>${name}</option>`).join('')}
+            </select></label>
           <div class="vrange">
             <input type="range" min="0" max="3" step="1" aria-label="Modell">
             <div class="vticks" aria-hidden="true"></div>
           </div>
           <div class="card"></div>
           <span class="hint device" role="status"></span>
-          <label class="set"><span><span>Sprache</span><span class="hint">In welcher Sprache du sprichst. Fest gewählt ist die Erkennung schneller und verrutscht nicht in eine andere Sprache</span></span>
-            <select class="in" name="voice_lang">
-              ${[['', 'Automatisch erkennen'], ['de', 'Deutsch'], ['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'], ['nl', 'Nederlands'], ['pl', 'Polski'], ['pt', 'Português'], ['tr', 'Türkçe'], ['ru', 'Русский'], ['uk', 'Українська'], ['ar', 'العربية'], ['ja', '日本語'], ['zh', '中文']]
-                .map(([id, name]) => `<option value="${id}"${id === (settings.voice_lang ?? '') ? ' selected' : ''}>${name}</option>`).join('')}
-            </select></label>
           <h4>Mikrofon testen</h4>
           <div class="card mictest">
             <div class="info">
@@ -191,6 +191,8 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
   // Mit eigener Grafikkarte sind auch die großen Modelle schnell. Bis die Antwort da ist, gilt der Prozessor.
   let recommended = navigator.hardwareConcurrency >= 8 ? 'small' : 'base';
   let models = null;
+  // Eigene Grafikkarte: dann ist jedes Modell schnell.
+  let fast = false;
   let polling = false;
 
   // Zeichnet die Karte zum Modell unter dem Regler. Neu gebaut wird sie nur, wenn sich der Zustand ändert;
@@ -214,7 +216,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
             ${active ? '<span class="badge ok">Aktiv</span>' : ''}</div>
           <span class="hint">${esc(m.note)}</span>
           ${level('Genauigkeit', i + 1, ['mäßig', 'gut', 'sehr gut', 'am besten'][i])}
-          ${level('Tempo', 4 - i, ['langsam', 'mittel', 'schnell', 'sehr schnell'][3 - i])}
+          ${fast ? level('Tempo', 4, 'sehr schnell auf deiner Grafikkarte') : level('Tempo', 4 - i, ['langsam', 'mittel', 'schnell', 'sehr schnell'][3 - i])}
         </div>
         <div class="vacts">
           ${part ? `<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt von ${esc(m.name)}"><span></span></div><span class="hint mono pct"></span>` : ''}
@@ -243,6 +245,7 @@ export async function openSettings(getSettings, hosts, onChange, area = 'setting
         if (first) {
           const gpu = await api.voiceGpu().catch(() => null);
           if (gpu?.discrete) recommended = 'turbo';
+          fast = Boolean(gpu?.discrete);
           voice.querySelector('.device').textContent = gpu
             ? `Gerechnet wird auf der Grafikkarte: ${gpu.name}`
             : 'Gerechnet wird auf dem Prozessor: keine passende Grafikkarte gefunden.';
