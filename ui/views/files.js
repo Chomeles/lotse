@@ -85,6 +85,7 @@ export function createFiles(el, getId) {
       <span class="smsg"></span>
       <div class="bar" hidden><span></span></div>
       <span class="mono pct" hidden></span>
+      <span class="sdisk" hidden></span>
     </div>`;
   const pathInput = el.querySelector('.path');
   const list = el.querySelector('.list');
@@ -95,11 +96,24 @@ export function createFiles(el, getId) {
   let path = null;
   let entries = [];
   let busy = false;
+  const diskLabel = status.querySelector('.sdisk');
+
+  // Rechts in der Statuszeile: freier Platz auf dem Datenträger des Ordners, gelb ab 90 % belegt, rot ab 97 %.
+  // Meldet der Server nichts (kein OpenSSH), bleibt die Stelle leer.
+  const showDisk = (disk, mode) => {
+    diskLabel.hidden = !disk;
+    if (!disk) return;
+    const used = Math.round((1 - disk.free / disk.total) * 100);
+    diskLabel.textContent = `${size(disk.free)} frei von ${size(disk.total)}`;
+    diskLabel.className = `sdisk ${used >= 97 ? 'r' : used >= 90 ? 'a' : ''}`;
+    diskLabel.title = `Datenträger zu ${used} % belegt${mode === null ? '' : ` · Rechte des Ordners: ${mode.toString(8).padStart(3, '0')}`}`;
+  };
 
   // Statuszeile: ohne Text steht dort, was der Ordner enthält.
   const say = (text, error = false) => {
     const dirs = entries.filter((e) => e.is_dir).length;
-    const rest = path === null ? '' : `${count(dirs, 'Ordner', 'Ordner')}, ${count(entries.length - dirs, 'Datei', 'Dateien')}`;
+    const bytes = entries.reduce((sum, e) => sum + (e.is_dir ? 0 : e.size), 0);
+    const rest = path === null ? '' : `${count(dirs, 'Ordner', 'Ordner')}, ${count(entries.length - dirs, 'Datei', 'Dateien')}${bytes ? ` · ${size(bytes)}` : ''}`;
     status.querySelector('.smsg').textContent = text || rest;
     status.className = `sbar ${error ? 'err' : text ? 'msg' : ''}`;
     bar.hidden = pct.hidden = true;
@@ -152,6 +166,7 @@ export function createFiles(el, getId) {
     const listing = await api.sftpList(getId(), target);
     path = listing.path;
     entries = listing.entries;
+    showDisk(listing.disk, listing.mode);
     render();
   }
 

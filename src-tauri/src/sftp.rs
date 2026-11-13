@@ -25,6 +25,17 @@ pub struct Entry {
 pub struct Listing {
     pub path: String,
     pub entries: Vec<Entry>,
+    /// Platz auf dem Datenträger, auf dem der Ordner liegt. Fehlt, wenn der Server das nicht meldet.
+    pub disk: Option<Disk>,
+    /// Rechte des Ordners (die unteren 12 Bit, z. B. 0o755), wenn der Server sie meldet.
+    pub mode: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Disk {
+    /// Bytes, die der angemeldete Benutzer noch belegen darf.
+    pub free: u64,
+    pub total: u64,
 }
 
 fn text(e: impl std::fmt::Display) -> String {
@@ -80,7 +91,13 @@ pub async fn list(sftp: &SftpSession, path: Option<&str>) -> Result<Listing, Str
         });
     }
     entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
-    Ok(Listing { path, entries })
+    // Beides ist Beiwerk: kann der Server es nicht (statvfs gibt es nur bei OpenSSH), fehlt es einfach.
+    let disk = sftp.fs_info(path.as_str()).await.ok().flatten().filter(|fs| fs.blocks > 0).map(|fs| Disk {
+        free: fs.blocks_avail.saturating_mul(fs.fragment_size),
+        total: fs.blocks.saturating_mul(fs.fragment_size),
+    });
+    let mode = sftp.metadata(path.as_str()).await.ok().and_then(|meta| meta.permissions).map(|bits| bits & 0o7777);
+    Ok(Listing { path, entries, disk, mode })
 }
 
 // shortcut: ein Block nach dem anderen, bei sehr großen Dateien langsam; dann parallele Anfragen ergänzen

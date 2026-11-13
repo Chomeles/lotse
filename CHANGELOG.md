@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.9.0 – 2026-11-13
+- Dateimanager: unten rechts steht, wie viel Platz auf dem Datenträger des offenen Ordners frei ist (gelb ab 90 % belegt, rot ab 97 %), daneben die Größe der Dateien im Ordner; der Tooltip nennt Belegung und Rechte des Ordners. Hostess liest das nur über die bestehende Verbindung und installiert nichts auf dem Server; meldet ein Server die Werte nicht, bleibt die Stelle leer
+
 ## 0.8.0 – 2026-11-13
 - Spracheingabe live: Der Text erscheint schon beim Sprechen, Wort für Wort, und wird nachgebessert, sobald mehr vom Satz bekannt ist. Nach einer Sprechpause steht ein Abschnitt fest. Der Mikrofon-Knopf ist nur noch an (rot) oder aus; er pulsiert mit der Lautstärke
 - Das Mikrofon bleibt an, bis man es ausschaltet (spätestens nach 10 Minuten)
