@@ -42,7 +42,7 @@ pub struct App {
     dir: PathBuf,
     conns: Arc<Mutex<HashMap<u32, Arc<Conn>>>>,
     next_id: AtomicU32,
-    /// Passphrasen und Passwörter je Host (siehe `secret_slot`),
+    /// Passphrasen je Schlüsseldatei und Passwörter je Benutzer und Server (siehe `secret_slot`),
     /// im Arbeitsspeicher, bis Hostess beendet wird. Dauerhaft gespeicherte liegen in `saved`.
     secrets: Mutex<HashMap<String, String>>,
     /// Kennzeichen „abbrechen“ je laufender Übertragung. Die Nummer vergibt die Oberfläche.
@@ -105,9 +105,17 @@ fn ssh_dir() -> Result<PathBuf, String> {
     }
 }
 
-/// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt: immer je Host, nie je Schlüsseldatei.
-/// Sonst würde ein für einen Host gespeicherter Schlüssel alle anderen Hosts mit derselben Datei mit entsperren.
+/// Unter diesem Namen wird das Geheimnis eines Hosts gemerkt: die Passphrase je Schlüsseldatei (sie gilt für
+/// alle Hosts mit genau dieser Datei, nie für andere Schlüssel), das Passwort je Benutzer und Server.
 fn secret_slot(host: &Host) -> String {
+    if host.key_path.is_empty() {
+        login_slot(host)
+    } else {
+        host.key_path.clone()
+    }
+}
+
+fn login_slot(host: &Host) -> String {
     format!("{}@{}:{}", host.user, host.address, host.port)
 }
 
@@ -134,10 +142,9 @@ pub async fn ssh_connect(
     let secret = secret
         .or_else(|| app.secrets.lock().unwrap().get(&slot).cloned())
         .or_else(|| saved(&slot)?.get_password().ok());
-    // Bis 0.6.0 lag die Passphrase je Schlüsseldatei und galt damit für alle Hosts mit dieser Datei:
-    // ein solcher Eintrag wird entfernt, der Host fragt dann einmal neu.
+    // Nur 0.6.1 legte die Passphrase je Host ab: ein solcher Eintrag wird entfernt.
     if !host.key_path.is_empty() {
-        if let Some(old) = saved(&host.key_path) {
+        if let Some(old) = saved(&login_slot(&host)) {
             let _ = old.delete_credential();
         }
     }
@@ -523,14 +530,19 @@ mod tests {
     use super::{secret_slot, Host};
 
     #[test]
-    fn gleicher_schluessel_entsperrt_keinen_anderen_host() {
-        let host = |name: &str, address: &str| Host {
-            name: name.into(),
+    fn passphrase_gilt_je_schluesseldatei_und_nie_fuer_andere_schluessel() {
+        let host = |address: &str, key_path: &str| Host {
+            name: address.into(),
             address: address.into(),
             port: 22,
             user: "root".into(),
-            key_path: "~/.ssh/id_ed25519".into(),
+            key_path: key_path.into(),
         };
-        assert_ne!(secret_slot(&host("a", "eins.example")), secret_slot(&host("b", "zwei.example")));
+        let same = secret_slot(&host("eins.example", "~/.ssh/id_a"));
+        assert_eq!(same, secret_slot(&host("zwei.example", "~/.ssh/id_a")));
+        assert_ne!(same, secret_slot(&host("eins.example", "~/.ssh/id_b")));
+        // Passwörter (Host ohne Schlüssel) gelten nur für genau diesen Benutzer und Server.
+        assert_ne!(secret_slot(&host("eins.example", "")), secret_slot(&host("zwei.example", "")));
+        assert_ne!(secret_slot(&host("eins.example", "")), same);
     }
 }

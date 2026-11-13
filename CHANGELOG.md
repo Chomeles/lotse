@@ -4,6 +4,9 @@ Versionen nach SemVer. Die Nummer steht nur in `src-tauri/Cargo.toml`.
 Solange 0.x: neue Funktion = zweite Stelle, Fehlerbehebung = dritte Stelle.
 Jede Version bekommt einen Eintrag hier und einen Git-Tag `vX.Y.Z`.
 
+## 0.6.2 – 2026-11-13
+- Die Passphrase gilt wieder je Schlüsseldatei, wie bis 0.6.0: einmal entsperrt oder gespeichert, verbinden alle Hosts mit genau dieser Datei ohne Nachfrage. Andere Schlüssel bleiben gesperrt. Die Umstellung auf „je Host“ aus 0.6.1 ist zurückgenommen
+
 ## 0.6.1 – 2026-11-13
 - Behoben: Eine gespeicherte Passphrase galt für alle Hosts mit derselben Schlüsseldatei, auch wenn sie nur bei einem gespeichert wurde. Gemerkt und gespeichert wird jetzt je Host; nach dem Update fragt jeder Host einmal neu
 - Wenige, kurze Übergänge (160 ms): Dialoge und Rechtsklick-Menü blenden weich ein, Reiter-Inhalt und der Wechsel Terminal ↔ Dateien blenden über, der Statuspunkt im Reiter pulst einmal beim Verbinden, Fortschrittsbalken gleiten, Knöpfe geben beim Drücken minimal nach. Wer in Windows Animationen abgeschaltet hat, bekommt keine
